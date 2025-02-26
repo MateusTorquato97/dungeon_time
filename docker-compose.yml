@@ -118,6 +118,36 @@ services:
     networks:
       - app-network
 
+  blackjack:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.blackjack
+    env_file: ./backend/.env
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 30s
+        order: start-first
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    environment:
+      DATABASE_URL: "postgres://postgres:Patinho123@my-dungeon:5432/postgres"
+      PORT: "3003"
+    depends_on:
+      my-dungeon:
+        condition: service_healthy
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
