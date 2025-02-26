@@ -1,0 +1,123 @@
+services:
+  my-dungeon:
+    container_name: my-dungeon-primary
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Patinho123
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - "C:/PROJETO_APP/banco_dados:/var/lib/postgresql/data"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  my-dungeon-replica:
+    image: postgres:latest
+    container_name: my-dungeon-replica
+    environment:
+      POSTGRES_PASSWORD: Patinho123
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - "C:/PROJETO_APP/banco_dados_replica:/var/lib/postgresql/data"
+    depends_on:
+      my-dungeon:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+    environment:
+      DATABASE_URL: "postgres://postgres:Patinho123@my-dungeon:5432/postgres"
+      DATABASE_REPLICA_URL: "postgres://postgres:Patinho123@my-dungeon-replica:5432/postgres"
+      PORT: "3000"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      my-dungeon:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "3000:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  dungeon-jobs:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jobs
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+    environment:
+      DATABASE_URL: "postgres://postgres:Patinho123@my-dungeon:5432/postgres"
+    depends_on:
+      my-dungeon:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  chat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.chat
+    env_file: ./backend/.env
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 30s
+        order: start-first
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    environment:
+      DATABASE_URL: "postgres://postgres:Patinho123@my-dungeon:5432/postgres"
+      PORT: "3002"
+    depends_on:
+      my-dungeon:
+        condition: service_healthy
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

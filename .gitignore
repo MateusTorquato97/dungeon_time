@@ -1,0 +1,16 @@
+# Diretórios e arquivos de dependências do Node.js
+**/node_modules/
+
+# Arquivos de ambiente sensíveis
+**/.env
+
+# Diretórios específicos do Expo (para mobile)
+mobile/.expo/
+mobile/assets/
+
+# Arquivos de lock que podem ser úteis ou não, dependendo da sua política
+# Caso queira que o package-lock.json seja versionado, remova a linha abaixo
+# **/package-lock.json
+
+# Outras pastas temporárias ou arquivos que não são essenciais
+.DS_Store

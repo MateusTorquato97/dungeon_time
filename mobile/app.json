@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "dungeon_time",
+    "slug": "dungeon_time",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff",
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ]
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "da8f240d-ffbf-4bc2-b1cd-82b259b66ba5"
+      }
+    },
+    "owner": "mateuslapa",
+    "notification": {
+      "icon": "./assets/images/notification_icon.png",
+      "color": "#a67c52",
+      "androidMode": "default",
+      "androidCollapsedTitle": "Dungeon Explorer",
+      "iosDisplayInForeground": true
+    }
+  }
+}

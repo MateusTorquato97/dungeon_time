@@ -1,0 +1,630 @@
+                  List of relations
+ Schema |           Name           | Type  |  Owner
+--------+--------------------------+-------+----------
+ public | base_itens               | table | postgres
+ public | batalhas                 | table | postgres
+ public | batalhas_diarias         | table | postgres
+ public | blackjack_jogadas        | table | postgres
+ public | blackjack_jogadores_sala | table | postgres
+ public | blackjack_rodadas        | table | postgres
+ public | blackjack_salas          | table | postgres
+ public | channels                 | table | postgres
+ public | dungeon_recompensas      | table | postgres
+ public | dungeons                 | table | postgres
+ public | efeitos_batalha          | table | postgres
+ public | elos                     | table | postgres
+ public | equipamentos             | table | postgres
+ public | habilidades              | table | postgres
+ public | habilidades_efeitos      | table | postgres
+ public | historico_elo            | table | postgres
+ public | inventario_equipamentos  | table | postgres
+ public | logs_batalha             | table | postgres
+ public | messages                 | table | postgres
+ public | participantes_batalha    | table | postgres
+ public | personagem_equipamentos  | table | postgres
+ public | personagem_skins         | table | postgres
+ public | personagens              | table | postgres
+ public | personagens_habilidades  | table | postgres
+ public | skins                    | table | postgres
+ public | temporadas               | table | postgres
+ public | times_batalha            | table | postgres
+ public | tipos_dungeon            | table | postgres
+ public | usuarios                 | table | postgre
+
+
+
+                                        Table "public.base_itens"
+   Column   |            Type             | Collation | Nullable |                Default
+------------+-----------------------------+-----------+----------+----------------------------------------
+ id         | integer                     |           | not null | nextval('base_itens_id_seq'::regclass)
+ nome       | character varying(100)      |           | not null |
+ categoria  | character varying(50)       |           | not null |
+ descricao  | text                        |           |          |
+ created_at | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ updated_at | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ slot       | character varying(50)       |           |          |
+Indexes:
+    "base_itens_pkey" PRIMARY KEY, btree (id)
+
+
+
+                                          Table "public.batalhas"
+    Column     |            Type             | Collation | Nullable |               Default
+---------------+-----------------------------+-----------+----------+--------------------------------------
+ id            | integer                     |           | not null | nextval('batalhas_id_seq'::regclass)
+ tipo          | character varying(20)       |           | not null |
+ status        | character varying(20)       |           | not null |
+ vencedor_time | integer                     |           |          |
+ iniciada_em   | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ finalizada_em | timestamp without time zone |           |          |
+ created_at    | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ updated_at    | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "batalhas_pkey" PRIMARY KEY, btree (id)
+Referenced by:
+    TABLE "logs_batalha" CONSTRAINT "logs_batalha_batalha_id_fkey" FOREIGN KEY (batalha_id) REFERENCES batalhas(id)
+    TABLE "times_batalha" CONSTRAINT "times_batalha_batalha_id_fkey" FOREIGN KEY (batalha_id) REFERENCES batalhas(id)
+
+
+                                            Table "public.batalhas_diarias"
+       Column       |            Type             | Collation | Nullable |                   Default
+--------------------+-----------------------------+-----------+----------+----------------------------------------------
+ id                 | integer                     |           | not null | nextval('batalhas_diarias_id_seq'::regclass)
+ usuario_id         | integer                     |           |          |
+ batalhas_restantes | integer                     |           |          | 5
+ ultima_atualizacao | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "batalhas_diarias_pkey" PRIMARY KEY, btree (id)
+    "batalhas_diarias_usuario_id_key" UNIQUE CONSTRAINT, btree (usuario_id)
+Foreign-key constraints:
+    "batalhas_diarias_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+
+
+
+                                        Table "public.blackjack_jogadas"
+   Column   |            Type             | Collation | Nullable |                    Default
+------------+-----------------------------+-----------+----------+-----------------------------------------------
+ id         | integer                     |           | not null | nextval('blackjack_jogadas_id_seq'::regclass)
+ rodada_id  | integer                     |           | not null |
+ usuario_id | integer                     |           | not null |
+ cartas     | jsonb                       |           | not null | '[]'::jsonb
+ pontos     | integer                     |           |          |
+ aposta     | integer                     |           | not null | 0
+ status     | character varying(20)       |           | not null |
+ resultado  | character varying(20)       |           |          |
+ created_at | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ updated_at | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+Indexes:
+    "blackjack_jogadas_pkey" PRIMARY KEY, btree (id)
+    "idx_blackjack_jogadas_rodada_id" btree (rodada_id)
+    "idx_blackjack_jogadas_usuario_id" btree (usuario_id)
+Check constraints:
+    "blackjack_jogadas_resultado_check" CHECK (resultado::text = ANY (ARRAY['ganhou'::character varying, 'perdeu'::character varying, 'empatou'::character varying, 'bla
+ckjack'::character varying, 'surrender'::character varying]::text[]))
+    "blackjack_jogadas_status_check" CHECK (status::text = ANY (ARRAY['aguardando'::character varying, 'hit'::character varying, 'stand'::character varying, 'double'::c
+haracter varying, 'surrender'::character varying]::text[]))
+Foreign-key constraints:
+    "blackjack_jogadas_rodada_id_fkey" FOREIGN KEY (rodada_id) REFERENCES blackjack_rodadas(id)
+    "blackjack_jogadas_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+Triggers:
+    update_blackjack_jogadas_updated_at BEFORE UPDATE ON blackjack_jogadas FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+
+
+                                         Table "public.blackjack_jogadores_sala"
+    Column    |            Type             | Collation | Nullable |                       Default
+--------------+-----------------------------+-----------+----------+------------------------------------------------------
+ id           | integer                     |           | not null | nextval('blackjack_jogadores_sala_id_seq'::regclass)
+ sala_id      | integer                     |           | not null |
+ usuario_id   | integer                     |           | not null |
+ posicao_mesa | integer                     |           | not null |
+ saldo_atual  | integer                     |           | not null | 0
+ status       | character varying(20)       |           | not null |
+ created_at   | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ updated_at   | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+Indexes:
+    "blackjack_jogadores_sala_pkey" PRIMARY KEY, btree (id)
+    "blackjack_jogadores_sala_sala_id_posicao_mesa_key" UNIQUE CONSTRAINT, btree (sala_id, posicao_mesa)
+    "blackjack_jogadores_sala_sala_id_usuario_id_key" UNIQUE CONSTRAINT, btree (sala_id, usuario_id)
+    "idx_blackjack_jogadores_sala_sala_id" btree (sala_id)
+    "idx_blackjack_jogadores_sala_usuario_id" btree (usuario_id)
+Check constraints:
+    "blackjack_jogadores_sala_posicao_mesa_check" CHECK (posicao_mesa >= 1 AND posicao_mesa <= 4)
+    "blackjack_jogadores_sala_status_check" CHECK (status::text = ANY (ARRAY['aguardando'::character varying, 'jogando'::character varying, 'finalizado'::character vary
+ing]::text[]))
+Foreign-key constraints:
+    "blackjack_jogadores_sala_sala_id_fkey" FOREIGN KEY (sala_id) REFERENCES blackjack_salas(id)
+    "blackjack_jogadores_sala_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+Triggers:
+    update_blackjack_jogadores_sala_updated_at BEFORE UPDATE ON blackjack_jogadores_sala FOR EACH ROW EXECUTE FUNCTION update_updated_at_column
+
+
+                                          Table "public.blackjack_rodadas"
+    Column     |            Type             | Collation | Nullable |                    Default
+---------------+-----------------------------+-----------+----------+-----------------------------------------------
+ id            | integer                     |           | not null | nextval('blackjack_rodadas_id_seq'::regclass)
+ sala_id       | integer                     |           | not null |
+ dealer_cartas | jsonb                       |           | not null | '[]'::jsonb
+ dealer_pontos | integer                     |           |          |
+ status        | character varying(20)       |           | not null |
+ created_at    | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ finalizada_em | timestamp without time zone |           |          |
+Indexes:
+    "blackjack_rodadas_pkey" PRIMARY KEY, btree (id)
+    "idx_blackjack_rodadas_sala_id" btree (sala_id)
+Check constraints:
+    "blackjack_rodadas_status_check" CHECK (status::text = ANY (ARRAY['em_distribuicao'::character varying, 'apostas'::character varying, 'jogadas'::character varying,
+'finalizada'::character varying]::text[]))
+Foreign-key constraints:
+    "blackjack_rodadas_sala_id_fkey" FOREIGN KEY (sala_id) REFERENCES blackjack_salas(id)
+Referenced by:
+    TABLE "blackjack_jogadas" CONSTRAINT "blackjack_jogadas_rodada_id_fkey" FOREIGN KEY (rodada_id) REFERENCES blackjack_rodadas(id)
+
+
+
+                                          Table "public.blackjack_salas"
+    Column     |            Type             | Collation | Nullable |                   Default
+---------------+-----------------------------+-----------+----------+---------------------------------------------
+ id            | integer                     |           | not null | nextval('blackjack_salas_id_seq'::regclass)
+ status        | character varying(20)       |           | not null |
+ max_jogadores | integer                     |           | not null | 4
+ min_aposta    | integer                     |           | not null | 100
+ max_aposta    | integer                     |           | not null | 1000
+ created_at    | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ updated_at    | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+Indexes:
+    "blackjack_salas_pkey" PRIMARY KEY, btree (id)
+Check constraints:
+    "blackjack_salas_status_check" CHECK (status::text = ANY (ARRAY['aguardando'::character varying, 'em_andamento'::character varying, 'finalizada'::character varying]
+::text[]))
+Referenced by:
+    TABLE "blackjack_jogadores_sala" CONSTRAINT "blackjack_jogadores_sala_sala_id_fkey" FOREIGN KEY (sala_id) REFERENCES blackjack_salas(id)
+    TABLE "blackjack_rodadas" CONSTRAINT "blackjack_rodadas_sala_id_fkey" FOREIGN KEY (sala_id) REFERENCES blackjack_salas(id)
+Triggers:
+    update_blackjack_salas_updated_at BEFORE UPDATE ON blackjack_salas FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+
+
+                                             Table "public.efeitos_batalha"
+        Column        |            Type             | Collation | Nullable |                   Default
+----------------------+-----------------------------+-----------+----------+---------------------------------------------
+ id                   | integer                     |           | not null | nextval('efeitos_batalha_id_seq'::regclass)
+ participante_id      | integer                     |           |          |
+ tipo_efeito          | character varying(50)       |           | not null |
+ valor                | integer                     |           |          |
+ duracao              | integer                     |           |          |
+ origem_usuario_id    | integer                     |           |          |
+ origem_habilidade_id | integer                     |           |          |
+ created_at           | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "efeitos_batalha_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "efeitos_batalha_origem_habilidade_id_fkey" FOREIGN KEY (origem_habilidade_id) REFERENCES habilidades(id)
+    "efeitos_batalha_origem_usuario_id_fkey" FOREIGN KEY (origem_usuario_id) REFERENCES personagens(usuario_id)
+    "efeitos_batalha_participante_id_fkey" FOREIGN KEY (participante_id) REFERENCES participantes_batalha(id)
+
+
+
+                                       Table "public.elos"
+     Column     |         Type          | Collation | Nullable |             Default
+----------------+-----------------------+-----------+----------+----------------------------------
+ id             | integer               |           | not null | nextval('elos_id_seq'::regclass)
+ nome           | character varying(50) |           | not null |
+ pontos_minimos | integer               |           | not null |
+ ordem          | integer               |           | not null |
+Indexes:
+    "elos_pkey" PRIMARY KEY, btree (id)
+
+
+                                            Table "public.historico_elo"
+      Column       |            Type             | Collation | Nullable |                  Default
+-------------------+-----------------------------+-----------+----------+-------------------------------------------
+ id                | integer                     |           | not null | nextval('historico_elo_id_seq'::regclass)
+ usuario_id        | integer                     |           |          |
+ elo_anterior      | character varying(20)       |           |          |
+ elo_novo          | character varying(20)       |           |          |
+ pontos_anteriores | integer                     |           |          |
+ pontos_novos      | integer                     |           |          |
+ data_mudanca      | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ temporada         | integer                     |           |          |
+Indexes:
+    "historico_elo_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "historico_elo_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+
+
+
+                                              Table "public.equipamentos"
+        Column         |            Type             | Collation | Nullable |                 Default
+-----------------------+-----------------------------+-----------+----------+------------------------------------------
+ id                    | integer                     |           | not null | nextval('equipamentos_id_seq'::regclass)
+ nome                  | character varying(100)      |           | not null |
+ tipo                  | character varying(50)       |           | not null |
+ nivel                 | integer                     |           | not null |
+ raridade              | character varying(50)       |           | not null |
+ forca                 | integer                     |           | not null | 0
+ destreza              | integer                     |           | not null | 0
+ inteligencia          | integer                     |           | not null | 0
+ vitalidade            | integer                     |           | not null | 0
+ defesa                | integer                     |           | not null | 0
+ created_at            | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ updated_at            | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ slot                  | character varying(50)       |           |          |
+ forca_raridade        | character varying(50)       |           |          |
+ destreza_raridade     | character varying(50)       |           |          |
+ inteligencia_raridade | character varying(50)       |           |          |
+ vitalidade_raridade   | character varying(50)       |           |          |
+ defesa_raridade       | character varying(50)       |           |          |
+ sorte                 | integer                     |           |          | 0
+ sorte_raridade        | character varying(50)       |           |          | 'comum'::character varying
+Indexes:
+    "equipamentos_pkey" PRIMARY KEY, btree (id)
+Referenced by:
+    TABLE "inventario_equipamentos" CONSTRAINT "fk_equipamento" FOREIGN KEY (equipamento_id) REFERENCES equipamentos(id) ON DELETE CASCADE
+    TABLE "dungeon_recompensas" CONSTRAINT "fk_equipamento" FOREIGN KEY (equipamento_id) REFERENCES equipamentos(id) ON DELETE CASCADE
+    TABLE "personagem_equipamentos" CONSTRAINT "personagem_equipamentos_anel_id_fkey" FOREIGN KEY (anel_id) REFERENCES equipamentos(id)
+    TABLE "personagem_equipamentos" CONSTRAINT "personagem_equipamentos_arma_id_fkey" FOREIGN KEY (arma_id) REFERENCES equipamentos(id)
+    TABLE "personagem_equipamentos" CONSTRAINT "personagem_equipamentos_armadura_id_fkey" FOREIGN KEY (armadura_id) REFERENCES equipamentos(id)
+    TABLE "personagem_equipamentos" CONSTRAINT "personagem_equipamentos_botas_id_fkey" FOREIGN KEY (botas_id) REFERENCES equipamentos(id)
+    TABLE "personagem_equipamentos" CONSTRAINT "personagem_equipamentos_calcas_id_fkey" FOREIGN KEY (calcas_id) REFERENCES equipamentos(id)
+    TABLE "personagem_equipamentos" CONSTRAINT "personagem_equipamentos_colar_id_fkey" FOREIGN KEY (colar_id) REFERENCES equipamentos(id)
+    TABLE "personagem_equipamentos" CONSTRAINT "personagem_equipamentos_elmo_id_fkey" FOREIGN KEY (elmo_id) REFERENCES equipamentos(id)
+    TABLE "personagem_equipamentos" CONSTRAINT "personagem_equipamentos_luvas_id_fkey" FOREIGN KEY (luvas_id) REFERENCES equipamentos(id)
+
+
+
+                                           Table "public.habilidades"
+     Column      |            Type             | Collation | Nullable |                 Default
+-----------------+-----------------------------+-----------+----------+-----------------------------------------
+ id              | integer                     |           | not null | nextval('habilidades_id_seq'::regclass)
+ nome            | character varying(100)      |           | not null |
+ descricao       | text                        |           |          |
+ tipo            | character varying(50)       |           | not null |
+ classe          | character varying(50)       |           | not null |
+ nivel_requisito | integer                     |           | not null |
+ cooldown        | integer                     |           | not null |
+ created_at      | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ updated_at      | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "habilidades_pkey" PRIMARY KEY, btree (id)
+Referenced by:
+    TABLE "efeitos_batalha" CONSTRAINT "efeitos_batalha_origem_habilidade_id_fkey" FOREIGN KEY (origem_habilidade_id) REFERENCES habilidades(id)
+    TABLE "habilidades_efeitos" CONSTRAINT "habilidades_efeitos_habilidade_id_fkey" FOREIGN KEY (habilidade_id) REFERENCES habilidades(id)
+    TABLE "logs_batalha" CONSTRAINT "logs_batalha_habilidade_id_fkey" FOREIGN KEY (habilidade_id) REFERENCES habilidades(id)
+    TABLE "personagens_habilidades" CONSTRAINT "personagens_habilidades_habilidade_id_fkey" FOREIGN KEY (habilidade_id) REFERENCES habilidades(id)
+Triggers:
+    update_habilidades_updated_at BEFORE UPDATE ON habilidades FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+
+
+
+                                       Table "public.habilidades_efeitos"
+    Column     |         Type          | Collation | Nullable |                     Default
+---------------+-----------------------+-----------+----------+-------------------------------------------------
+ id            | integer               |           | not null | nextval('habilidades_efeitos_id_seq'::regclass)
+ habilidade_id | integer               |           |          |
+ tipo_efeito   | character varying(50) |           | not null |
+ valor         | numeric               |           | not null |
+ atributo_base | character varying(50) |           |          |
+ duracao       | integer               |           |          |
+ chance        | numeric               |           |          | 100
+Indexes:
+    "habilidades_efeitos_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "habilidades_efeitos_habilidade_id_fkey" FOREIGN KEY (habilidade_id) REFERENCES habilidades(id)
+
+
+                                          Table "public.inventario_equipamentos"
+     Column     |            Type             | Collation | Nullable |                       Default
+----------------+-----------------------------+-----------+----------+-----------------------------------------------------
+ id             | integer                     |           | not null | nextval('inventario_equipamentos_id_seq'::regclass)
+ usuario_id     | integer                     |           | not null |
+ equipamento_id | integer                     |           | not null |
+ created_at     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ updated_at     | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ visualizado    | boolean                     |           |          | false
+Indexes:
+    "inventario_equipamentos_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "fk_equipamento" FOREIGN KEY (equipamento_id) REFERENCES equipamentos(id) ON DELETE CASCADE
+    "fk_usuario" FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+
+
+
+                                            Table "public.logs_batalha"
+       Column       |            Type             | Collation | Nullable |                 Default
+--------------------+-----------------------------+-----------+----------+------------------------------------------
+ id                 | integer                     |           | not null | nextval('logs_batalha_id_seq'::regclass)
+ batalha_id         | integer                     |           |          |
+ turno              | integer                     |           | not null |
+ tipo_acao          | character varying(50)       |           | not null |
+ usuario_origem     | integer                     |           |          |
+ usuario_alvo       | integer                     |           |          |
+ habilidade_id      | integer                     |           |          |
+ dano               | integer                     |           |          |
+ cura               | integer                     |           |          |
+ efeitos            | jsonb                       |           |          |
+ created_at         | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ vida_alvo_pos_acao | integer                     |           |          |
+Indexes:
+    "logs_batalha_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "logs_batalha_batalha_id_fkey" FOREIGN KEY (batalha_id) REFERENCES batalhas(id)
+    "logs_batalha_habilidade_id_fkey" FOREIGN KEY (habilidade_id) REFERENCES habilidades(id)
+    "logs_batalha_usuario_alvo_fkey" FOREIGN KEY (usuario_alvo) REFERENCES personagens(usuario_id)
+    "logs_batalha_usuario_origem_fkey" FOREIGN KEY (usuario_origem) REFERENCES personagens(usuario_id)
+
+
+
+                                        Table "public.participantes_batalha"
+   Column   |            Type             | Collation | Nullable |                      Default
+------------+-----------------------------+-----------+----------+---------------------------------------------------
+ id         | integer                     |           | not null | nextval('participantes_batalha_id_seq'::regclass)
+ time_id    | integer                     |           |          |
+ usuario_id | integer                     |           |          |
+ posicao    | integer                     |           | not null |
+ vida_atual | integer                     |           |          |
+ mana_atual | integer                     |           |          |
+ status     | character varying(20)       |           | not null |
+ created_at | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ vida_base  | integer                     |           |          |
+ mana_base  | integer                     |           |          |
+Indexes:
+    "participantes_batalha_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "participantes_batalha_time_id_fkey" FOREIGN KEY (time_id) REFERENCES times_batalha(id)
+    "participantes_batalha_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES personagens(usuario_id)
+Referenced by:
+    TABLE "efeitos_batalha" CONSTRAINT "efeitos_batalha_participante_id_fkey" FOREIGN KEY (participante_id) REFERENCES participantes_batalha(id)
+
+
+                        Table "public.personagem_equipamentos"
+   Column    |            Type             | Collation | Nullable |      Default
+-------------+-----------------------------+-----------+----------+-------------------
+ usuario_id  | integer                     |           | not null |
+ elmo_id     | integer                     |           |          |
+ armadura_id | integer                     |           |          |
+ colar_id    | integer                     |           |          |
+ anel_id     | integer                     |           |          |
+ calcas_id   | integer                     |           |          |
+ luvas_id    | integer                     |           |          |
+ botas_id    | integer                     |           |          |
+ arma_id     | integer                     |           |          |
+ updated_at  | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "personagem_equipamentos_pkey" PRIMARY KEY, btree (usuario_id)
+Foreign-key constraints:
+    "personagem_equipamentos_anel_id_fkey" FOREIGN KEY (anel_id) REFERENCES equipamentos(id)
+    "personagem_equipamentos_arma_id_fkey" FOREIGN KEY (arma_id) REFERENCES equipamentos(id)
+    "personagem_equipamentos_armadura_id_fkey" FOREIGN KEY (armadura_id) REFERENCES equipamentos(id)
+    "personagem_equipamentos_botas_id_fkey" FOREIGN KEY (botas_id) REFERENCES equipamentos(id)
+    "personagem_equipamentos_calcas_id_fkey" FOREIGN KEY (calcas_id) REFERENCES equipamentos(id)
+    "personagem_equipamentos_colar_id_fkey" FOREIGN KEY (colar_id) REFERENCES equipamentos(id)
+    "personagem_equipamentos_elmo_id_fkey" FOREIGN KEY (elmo_id) REFERENCES equipamentos(id)
+    "personagem_equipamentos_luvas_id_fkey" FOREIGN KEY (luvas_id) REFERENCES equipamentos(id)
+    "personagem_equipamentos_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+
+
+
+            Table "public.personagem_skins"
+   Column   |  Type   | Collation | Nullable | Default
+------------+---------+-----------+----------+---------
+ usuario_id | integer |           | not null |
+ skin_id    | integer |           | not null |
+ equipada   | boolean |           |          | false
+Indexes:
+    "personagem_skins_pkey" PRIMARY KEY, btree (usuario_id, skin_id)
+Foreign-key constraints:
+    "personagem_skins_skin_id_fkey" FOREIGN KEY (skin_id) REFERENCES skins(id)
+    "personagem_skins_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+
+
+                                          Table "public.skins"
+     Column     |            Type             | Collation | Nullable |              Default
+----------------+-----------------------------+-----------+----------+-----------------------------------
+ id             | integer                     |           | not null | nextval('skins_id_seq'::regclass)
+ nome           | character varying(100)      |           | not null |
+ classe         | character varying(50)       |           | not null |
+ caminho_imagem | character varying(200)      |           | not null |
+ raridade       | character varying(20)       |           |          |
+ preco          | integer                     |           |          |
+ disponivel     | boolean                     |           |          | true
+ created_at     | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "skins_pkey" PRIMARY KEY, btree (id)
+Referenced by:
+    TABLE "personagem_skins" CONSTRAINT "personagem_skins_skin_id_fkey" FOREIGN KEY (skin_id) REFERENCES skins(id)
+
+
+                                   Table "public.personagens"
+    Column    |            Type             | Collation | Nullable |           Default
+--------------+-----------------------------+-----------+----------+-----------------------------
+ usuario_id   | integer                     |           | not null |
+ forca        | integer                     |           | not null | 10
+ destreza     | integer                     |           | not null | 10
+ inteligencia | integer                     |           | not null | 10
+ vitalidade   | integer                     |           | not null | 10
+ sorte        | integer                     |           | not null | 10
+ defesa       | integer                     |           | not null | 10
+ created_at   | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ updated_at   | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ experiencia  | integer                     |           |          | 0
+ classe       | character varying(50)       |           |          |
+ nivel        | integer                     |           |          | 1
+ xp_atual     | integer                     |           |          | 0
+ prox_xp      | integer                     |           |          | 100
+ vida         | integer                     |           |          |
+ mana         | integer                     |           |          |
+ elo          | character varying(20)       |           | not null | 'Bronze'::character varying
+ pontos_arena | integer                     |           | not null | 0
+Indexes:
+    "usuario_atributos_pkey" PRIMARY KEY, btree (usuario_id)
+Check constraints:
+    "check_classe" CHECK (classe::text = ANY (ARRAY['guerreiro'::character varying, 'mago'::character varying, 'ladino'::character varying, 'paladino'::character varyin
+g, 'cacador'::character varying, 'clerigo'::character varying, 'mercenario'::character varying, 'cavaleiro'::character varying]::text[]))
+Foreign-key constraints:
+    "fk_usuario" FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+Referenced by:
+    TABLE "efeitos_batalha" CONSTRAINT "efeitos_batalha_origem_usuario_id_fkey" FOREIGN KEY (origem_usuario_id) REFERENCES personagens(usuario_id)
+    TABLE "logs_batalha" CONSTRAINT "logs_batalha_usuario_alvo_fkey" FOREIGN KEY (usuario_alvo) REFERENCES personagens(usuario_id)
+    TABLE "logs_batalha" CONSTRAINT "logs_batalha_usuario_origem_fkey" FOREIGN KEY (usuario_origem) REFERENCES personagens(usuario_id)
+    TABLE "participantes_batalha" CONSTRAINT "participantes_batalha_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES personagens(usuario_id)
+    TABLE "personagens_habilidades" CONSTRAINT "personagens_habilidades_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES personagens(usuario_i
+
+
+
+                                           Table "public.personagens_habilidades"
+      Column      |            Type             | Collation | Nullable |                       Default
+------------------+-----------------------------+-----------+----------+-----------------------------------------------------
+ id               | integer                     |           | not null | nextval('personagens_habilidades_id_seq'::regclass)
+ usuario_id       | integer                     |           |          |
+ habilidade_id    | integer                     |           |          |
+ desbloqueada_em  | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ nivel_habilidade | integer                     |           |          | 1
+Indexes:
+    "personagens_habilidades_pkey" PRIMARY KEY, btree (id)
+    "personagens_habilidades_usuario_id_habilidade_id_key" UNIQUE CONSTRAINT, btree (usuario_id, habilidade_id)
+Foreign-key constraints:
+    "personagens_habilidades_habilidade_id_fkey" FOREIGN KEY (habilidade_id) REFERENCES habilidades(id)
+    "personagens_habilidades_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES personagens(usuario_id)
+
+
+                                         Table "public.times_batalha"
+   Column    |            Type             | Collation | Nullable |                  Default
+-------------+-----------------------------+-----------+----------+-------------------------------------------
+ id          | integer                     |           | not null | nextval('times_batalha_id_seq'::regclass)
+ batalha_id  | integer                     |           |          |
+ numero_time | integer                     |           | not null |
+ created_at  | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+Indexes:
+    "times_batalha_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "times_batalha_batalha_id_fkey" FOREIGN KEY (batalha_id) REFERENCES batalhas(id)
+Referenced by:
+    TABLE "participantes_batalha" CONSTRAINT "participantes_batalha_time_id_fkey" FOREIGN KEY (time_id) REFERENCES times_batalha(id)
+
+
+
+                                         Table "public.temporadas"
+   Column    |            Type             | Collation | Nullable |                Default
+-------------+-----------------------------+-----------+----------+----------------------------------------
+ id          | integer                     |           | not null | nextval('temporadas_id_seq'::regclass)
+ nome        | character varying(100)      |           |          |
+ data_inicio | timestamp without time zone |           |          |
+ data_fim    | timestamp without time zone |           |          |
+ status      | character varying(20)       |           |          | 'ativa'::character varying
+ recompensas | jsonb                       |           |          |
+Indexes:
+    "temporadas_pkey" PRIMARY KEY, btree (id)
+
+
+
+                                          Table "public.usuarios"
+     Column     |            Type             | Collation | Nullable |               Default
+----------------+-----------------------------+-----------+----------+--------------------------------------
+ id             | integer                     |           | not null | nextval('usuarios_id_seq'::regclass)
+ email          | character varying(255)      |           | not null |
+ nickname       | character varying(50)       |           | not null |
+ senha_hash     | character varying(255)      |           | not null |
+ coins          | integer                     |           |          | 0
+ energia        | integer                     |           |          | 100
+ conta_validada | boolean                     |           |          | false
+ is_vip         | boolean                     |           |          | false
+ primeiro_login | timestamp without time zone |           |          |
+ ultimo_login   | timestamp without time zone |           |          |
+ role           | character varying(20)       |           |          | 'user'::character varying
+ created_at     | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ updated_at     | timestamp without time zone |           |          | CURRENT_TIMESTAMP
+ status         | character varying(20)       |           | not null | 'ativo'::character varying
+Indexes:
+    "usuarios_pkey" PRIMARY KEY, btree (id)
+    "usuarios_email_key" UNIQUE CONSTRAINT, btree (email)
+    "usuarios_nickname_key" UNIQUE CONSTRAINT, btree (nickname)
+Check constraints:
+    "check_status" CHECK (status::text = ANY (ARRAY['ativo'::character varying, 'inativo'::character varying, 'banido'::character varying, 'pendente'::character varying
+, 'silenciado'::character varying]::text[]))
+Referenced by:
+    TABLE "batalhas_diarias" CONSTRAINT "batalhas_diarias_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+    TABLE "dungeons" CONSTRAINT "dungeons_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    TABLE "personagens" CONSTRAINT "fk_usuario" FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    TABLE "inventario_equipamentos" CONSTRAINT "fk_usuario" FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    TABLE "personagem_equipamentos" CONSTRAINT "personagem_equipamentos_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+    TABLE "personagem_skins" CONSTRAINT "personagem_skins_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+Triggers:
+    update_usuarios_updated_at BEFORE UPDATE ON usuarios FOR EACH ROW EXECUTE FUNCTION update_updated_at_column
+
+
+REGISTROS DA TABELA 'habilidades':
+"id"	"nome"	"descricao"	"tipo"	"classe"	"nivel_requisito"	"cooldown"	"created_at"	"updated_at"
+1	"Golpe Circular"	"Um poderoso golpe circular que causa dano e tem chance de atordoar o inimigo"	"ataque"	"guerreiro"	5	3	"2025-02-18 15:56:31.39344"	"2025-02-18 15:56:31.39344"
+2	"Postura Defensiva"	"Aumenta sua defesa e reflete parte do dano recebido"	"defesa"	"guerreiro"	10	4	"2025-02-18 15:56:31.39344"	"2025-02-18 15:56:31.39344"
+3	"Grito de Guerra"	"Aumenta sua força e intimida o inimigo"	"buff"	"guerreiro"	15	4	"2025-02-18 15:56:31.39344"	"2025-02-18 15:56:31.39344"
+4	"Projétil Arcano"	"Dispara um projétil de energia mágica que ignora parte da resistência"	"ataque"	"mago"	5	3	"2025-02-18 15:57:01.326718"	"2025-02-18 15:57:01.326718"
+5	"Barreira Mágica"	"Cria uma barreira que absorve dano"	"defesa"	"mago"	10	4	"2025-02-18 15:57:01.326718"	"2025-02-18 15:57:01.326718"
+6	"Explosão Elemental"	"Causa dano em área com efeito elemental aleatório"	"ataque"	"mago"	15	5	"2025-02-18 15:57:01.326718"	"2025-02-18 15:57:01.326718"
+7	"Ataque Furtivo"	"Ataque poderoso pelas costas com alta chance de crítico"	"ataque"	"ladino"	5	3	"2025-02-18 15:57:11.018749"	"2025-02-18 15:57:11.018749"
+8	"Evasão"	"Aumenta drasticamente a chance de esquiva"	"defesa"	"ladino"	10	4	"2025-02-18 15:57:11.018749"	"2025-02-18 15:57:11.018749"
+9	"Golpe Venenoso"	"Aplica veneno que causa dano ao longo do tempo"	"ataque"	"ladino"	15	4	"2025-02-18 15:57:11.018749"	"2025-02-18 15:57:11.018749"
+10	"Julgamento Divino"	"Ataque sagrado que cura baseado no dano causado"	"ataque"	"paladino"	5	3	"2025-02-18 15:57:20.870317"	"2025-02-18 15:57:20.870317"
+11	"Bênção Sagrada"	"Cura e aumenta a defesa do alvo"	"cura"	"paladino"	10	4	"2025-02-18 15:57:20.870317"	"2025-02-18 15:57:20.870317"
+12	"Aura de Proteção"	"Reduz o dano recebido por todos aliados próximos"	"defesa"	"paladino"	15	5	"2025-02-18 15:57:20.870317"	"2025-02-18 15:57:20.870317"
+13	"Tiro Certeiro"	"Disparo preciso com alta chance de acerto crítico"	"ataque"	"cacador"	5	3	"2025-02-18 16:00:36.475673"	"2025-02-18 16:00:36.475673"
+14	"Armadilha"	"Prepara uma armadilha que imobiliza e causa dano contínuo"	"controle"	"cacador"	10	4	"2025-02-18 16:00:36.475673"	"2025-02-18 16:00:36.475673"
+15	"Disparo Múltiplo"	"Dispara várias flechas em alvos aleatórios"	"ataque"	"cacador"	15	4	"2025-02-18 16:00:36.475673"	"2025-02-18 16:00:36.475673"
+16	"Cura Divina"	"Poderosa cura que remove efeitos negativos"	"cura"	"clerigo"	5	3	"2025-02-18 16:00:46.082571"	"2025-02-18 16:00:46.082571"
+17	"Martelo Sagrado"	"Ataque sagrado com chance de atordoamento"	"ataque"	"clerigo"	10	4	"2025-02-18 16:00:46.082571"	"2025-02-18 16:00:46.082571"
+18	"Palavra Sagrada"	"Cura em área e fornece proteção aos aliados"	"cura"	"clerigo"	15	5	"2025-02-18 16:00:46.082571"	"2025-02-18 16:00:46.082571"
+19	"Golpe Oportunista"	"Ataque com chance de golpe duplo"	"ataque"	"mercenario"	5	3	"2025-02-18 16:00:49.67154"	"2025-02-18 16:00:49.67154"
+20	"Provocação"	"Força o alvo a atacar e aumenta esquiva"	"controle"	"mercenario"	10	4	"2025-02-18 16:00:49.67154"	"2025-02-18 16:00:49.67154"
+21	"Último Recurso"	"Aumenta temporariamente todos os atributos"	"buff"	"mercenario"	15	6	"2025-02-18 16:00:49.67154"	"2025-02-18 16:00:49.67154"
+22	"Investida"	"Ataque poderoso que empurra o alvo"	"ataque"	"cavaleiro"	5	3	"2025-02-18 16:00:52.735312"	"2025-02-18 16:00:52.735312"
+23	"Escudo Protetor"	"Bloqueia próximo ataque e contra-ataca"	"defesa"	"cavaleiro"	10	4	"2025-02-18 16:00:52.735312"	"2025-02-18 16:00:52.735312"
+24	"Formação Defensiva"	"Aumenta defesa própria e protege aliados"	"defesa"	"cavaleiro"	15	5	"2025-02-18 16:00:52.735312"	"2025-02-18 16:00:52.735312"
+
+REGISTROS DA TABELA 'habilidades_efeitos':
+"id"	"habilidade_id"	"tipo_efeito"	"valor"	"atributo_base"	"duracao"	"chance"
+1	1	"dano"	140	"forca"		100
+2	1	"atordoar"	30		1	30
+3	2	"buff_defesa"	40		2	100
+4	2	"reflexao_dano"	20		2	100
+5	3	"buff_forca"	25		2	100
+6	3	"debuff_ataque"	15		2	100
+7	4	"dano"	180	"inteligencia"		100
+8	4	"penetracao_magica"	30			100
+9	5	"escudo_magico"	100	"inteligencia"	2	100
+10	6	"dano_area"	150	"inteligencia"		100
+11	6	"efeito_elemental"	30		2	100
+12	7	"dano"	200	"destreza"		100
+13	7	"bonus_critico"	30			100
+14	8	"buff_esquiva"	60		1	100
+15	8	"contra_ataque"	50	"destreza"		30
+16	9	"dano"	120	"destreza"		100
+17	9	"veneno"	20	"destreza"	3	100
+18	10	"dano"	160	"forca"		100
+19	10	"cura"	20			100
+20	11	"cura"	100	"vitalidade"		100
+21	11	"buff_defesa"	25		2	100
+22	12	"reducao_dano"	30		3	100
+28	13	"dano"	180	"destreza"		100
+29	13	"bonus_critico"	40			100
+30	14	"imobilizar"	100		1	100
+31	14	"dano_tempo"	30	"destreza"	3	100
+32	15	"dano_multiplo"	70	"destreza"		100
+33	15	"alvos_adicionais"	3			100
+34	16	"cura"	150	"inteligencia"		100
+35	16	"remover_efeito"	100			100
+36	17	"dano"	140	"forca"		100
+37	17	"atordoar"	40		1	40
+38	18	"cura_area"	100	"inteligencia"		100
+39	18	"buff_defesa_grupo"	25		2	100
+40	19	"dano"	160	"forca"		100
+41	19	"golpe_duplo"	40			40
+42	20	"provocar"	100		2	100
+43	20	"buff_esquiva"	30		2	100
+44	21	"buff_todos_atributos"	30		2	100
+45	22	"dano"	150	"forca"		100
+46	22	"empurrar"	100			100
+47	23	"bloqueio"	100		1	100
+49	24	"buff_defesa"	50		2	100
+50	24	"protecao_aliados"	25		2	100
+
+REGISTROS DA TABELA 'personagens_habilidades':
+1	7	23	"2025-02-19 01:42:54.087146"	1
+3	8	10	"2025-02-19 01:42:54.087146"	1

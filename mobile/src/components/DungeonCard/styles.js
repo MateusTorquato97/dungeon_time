@@ -1,0 +1,98 @@
+import { StyleSheet, Dimensions } from 'react-native';
+
+const { width: screenWidth } = Dimensions.get('window');
+
+export default StyleSheet.create({
+    container: {
+        marginHorizontal: screenWidth * 0.04,
+        marginVertical: screenWidth * 0.015,
+        borderRadius: 8,
+        overflow: 'hidden',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+    },
+    gradient: {
+        flexDirection: 'row',
+        padding: screenWidth * 0.025,
+        alignItems: 'center',
+    },
+    image: {
+        width: screenWidth * 0.18,
+        height: screenWidth * 0.18,
+        borderRadius: 8,
+        marginRight: screenWidth * 0.025,
+        borderWidth: 1.5,
+        borderColor: '#a67c52',
+    },
+    infoContainer: {
+        flex: 1,
+        justifyContent: 'space-between',
+    },
+    title: {
+        color: '#a67c52',
+        fontSize: screenWidth * 0.038,
+        fontWeight: 'bold',
+        marginBottom: screenWidth * 0.01,
+        fontFamily: 'serif',
+        textShadowColor: '#000',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 1,
+    },
+    description: {
+        color: '#d4d4d4',
+        fontSize: screenWidth * 0.03,
+        marginBottom: screenWidth * 0.015,
+        lineHeight: screenWidth * 0.035,
+    },
+    statsContainer: {
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        padding: screenWidth * 0.02,
+        borderRadius: 6,
+        marginBottom: screenWidth * 0.015,
+    },
+    statsText: {
+        color: '#d4d4d4',
+        fontSize: screenWidth * 0.028,
+        marginBottom: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    startButton: {
+        backgroundColor: '#a67c52',
+        padding: screenWidth * 0.02,
+        borderRadius: 6,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    startButtonText: {
+        color: '#ffffff',
+        fontSize: screenWidth * 0.032,
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 2,
+    },
+    lockedOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    lockedText: {
+        color: '#ff4444',
+        fontSize: screenWidth * 0.035,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        textShadowColor: '#000',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 2,
+    },
+}); 
