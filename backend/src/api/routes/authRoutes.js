@@ -203,7 +203,11 @@ router.post('/login', async (req, res) => {
         }
 
         // Gera um token JWT com validade de 7 dias
-        const token = jwt.sign({ id: usuario.id, email: usuario.email }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jwt.sign({
+            id: usuario.id,
+            email: usuario.email,
+            nickname: usuario.nickname
+        }, JWT_SECRET, { expiresIn: '7d' });
         res.json({ token, usuario });
     } catch (error) {
         console.error('[Auth] Erro no login:', error);

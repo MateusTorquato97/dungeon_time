@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Image, Modal, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Image, Modal, StyleSheet, Alert, ScrollView } from 'react-native';
 import { io } from "socket.io-client";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -27,6 +27,8 @@ const BlackjackScreen = ({ navigation }) => {
     const [showBetModal, setShowBetModal] = useState(false);
     const [roundResult, setRoundResult] = useState(null);
     const [gamePhase, setGamePhase] = useState('waiting'); // 'waiting', 'betting', 'playing', 'result'
+    // Novo estado para acompanhar as jogadas de todos os jogadores
+    const [allPlays, setAllPlays] = useState([]);
 
     const socket = useRef(null);
     const myPosition = useRef(null);
@@ -105,6 +107,9 @@ const BlackjackScreen = ({ navigation }) => {
                             setCurrentBet(myPlay.bet);
                         }
 
+                        // Atualizar todas as jogadas
+                        setAllPlays(data.currentRound.plays);
+
                         // Verificar se há cartas do dealer
                         if (data.currentRound.dealerCards && data.currentRound.dealerCards.length > 0) {
                             setDealerCards([data.currentRound.dealerCards[0]]);
@@ -115,6 +120,9 @@ const BlackjackScreen = ({ navigation }) => {
                         // Mostrar resultados
                         setDealerCards(data.currentRound.dealerCards);
                         setDealerPoints(data.currentRound.dealerPoints);
+
+                        // Atualizar todas as jogadas
+                        setAllPlays(data.currentRound.plays);
 
                         // Encontrar minha jogada
                         const myPlay = data.currentRound.plays.find(p => p.userId === userId.current);
@@ -137,22 +145,37 @@ const BlackjackScreen = ({ navigation }) => {
             });
 
             socket.current.on('player joined', (data) => {
-                console.log('Jogador entrou:', data);
-                // Atualizar a lista de jogadores
-                setPlayers(prevPlayers => {
-                    // Verificar se o jogador já está na lista
-                    const exists = prevPlayers.some(p => p.userId === data.userId);
-                    if (exists) return prevPlayers;
+                console.log('Jogador entrou (dados completos):', JSON.stringify(data, null, 2));
 
-                    // Adicionar o novo jogador
-                    return [...prevPlayers, data];
-                });
+                // Quando um jogador entra, vamos fazer uma solicitação para obter os detalhes atualizados da sala
+                if (currentRoom?.id) {
+                    // Buscar detalhes completos da sala
+                    fetchRoomDetails(currentRoom.id);
+                } else {
+                    // Caso ainda não tenhamos um ID da sala, atualizar apenas com os dados recebidos
+                    setPlayers(prevPlayers => {
+                        // Verificar se o jogador já está na lista
+                        const exists = prevPlayers.some(p => p.userId === data.userId);
+                        if (exists) return prevPlayers;
+
+                        // Adicionar o novo jogador com as informações fornecidas
+                        return [...prevPlayers, {
+                            userId: data.userId,
+                            nickname: data.nickname || usuario.name || 'Jogador ' + data.position,
+                            position: data.position,
+                            balance: data.balance || 0,
+                            status: data.status || 'aguardando'
+                        }];
+                    });
+                }
             });
 
             socket.current.on('player left', (data) => {
                 console.log('Jogador saiu:', data);
                 // Remover o jogador da lista
                 setPlayers(prevPlayers => prevPlayers.filter(p => p.userId !== data.userId));
+                // Remover as jogadas desse jogador também
+                setAllPlays(prevPlays => prevPlays.filter(p => p.userId !== data.userId));
             });
 
             socket.current.on('round started', (data) => {
@@ -168,6 +191,7 @@ const BlackjackScreen = ({ navigation }) => {
                 setPlayerPoints(0);
                 setRoundResult(null);
                 setCurrentBet(0);
+                setAllPlays([]);
             });
 
             socket.current.on('betting ended', (data) => {
@@ -181,6 +205,9 @@ const BlackjackScreen = ({ navigation }) => {
 
                 // Atualizar as cartas do dealer (apenas a primeira carta é visível)
                 setDealerCards([data.dealerUpCard]);
+
+                // Atualizar todas as jogadas
+                setAllPlays(data.plays);
 
                 // Encontrar minha jogada
                 const myPlay = data.plays.find(p => p.userId === userId.current);
@@ -205,6 +232,15 @@ const BlackjackScreen = ({ navigation }) => {
             socket.current.on('player acted', (data) => {
                 console.log('Jogador agiu:', data);
 
+                // Atualizar a jogada do jogador que agiu
+                setAllPlays(prevPlays =>
+                    prevPlays.map(play =>
+                        play.userId === data.userId
+                            ? { ...play, cards: data.cards, points: data.points, status: data.status }
+                            : play
+                    )
+                );
+
                 // Se for minha jogada, atualizar minhas cartas
                 if (data.userId === userId.current) {
                     setPlayerCards(data.cards);
@@ -213,7 +249,8 @@ const BlackjackScreen = ({ navigation }) => {
                 }
 
                 // Atualizar o status do jogo
-                setGameStatus(`${data.userId === userId.current ? 'Você' : 'Jogador'} escolheu ${actionTranslation(data.action)}.`);
+                const playerName = players.find(p => p.userId === data.userId)?.nickname || 'Jogador';
+                setGameStatus(`${data.userId === userId.current ? 'Você' : playerName} escolheu ${actionTranslation(data.action)}.`);
             });
 
             socket.current.on('next player', (data) => {
@@ -232,6 +269,15 @@ const BlackjackScreen = ({ navigation }) => {
 
             socket.current.on('turn timeout', (data) => {
                 console.log('Tempo esgotado:', data);
+
+                // Atualizar a jogada do jogador que teve timeout
+                setAllPlays(prevPlays =>
+                    prevPlays.map(play =>
+                        play.userId === data.userId
+                            ? { ...play, cards: data.cards, points: data.points, status: data.status }
+                            : play
+                    )
+                );
 
                 // Se for minha jogada, atualizar minhas cartas
                 if (data.userId === userId.current) {
@@ -253,10 +299,15 @@ const BlackjackScreen = ({ navigation }) => {
                 setDealerCards(data.dealerHand);
                 setDealerPoints(data.dealerPoints);
 
+                // Atualizar todas as jogadas com os resultados
+                setAllPlays(data.plays);
+
                 // Encontrar minha jogada
                 const myPlay = data.plays.find(p => p.userId === userId.current);
                 if (myPlay) {
                     setRoundResult(myPlay.result);
+                    setPlayerCards(myPlay.cards);
+                    setPlayerPoints(myPlay.points);
 
                     // Atualizar o saldo
                     if (myPlay.result) {
@@ -283,11 +334,7 @@ const BlackjackScreen = ({ navigation }) => {
                 }
 
                 // Atualizar o saldo
-                const updatedPlayer = data.plays.find(p => p.userId === userId.current);
-                if (updatedPlayer) {
-                    // Precisamos fazer uma solicitação separada para obter o saldo atualizado
-                    fetchPlayerBalance();
-                }
+                fetchPlayerBalance();
             });
 
             socket.current.on('error', (data) => {
@@ -309,6 +356,37 @@ const BlackjackScreen = ({ navigation }) => {
             setPlayerBalance(response.data.balance);
         } catch (error) {
             console.error('Erro ao buscar saldo:', error);
+        }
+    };
+
+    // Buscar detalhes completos da sala
+    const fetchRoomDetails = async (roomId) => {
+        try {
+            console.log('Buscando detalhes atualizados da sala:', roomId);
+            const response = await axios.get(`${BLACKJACK_API_URL}/api/blackjack/rooms/${roomId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            // Atualizar o estado com os dados mais recentes
+            if (response.data.room) {
+                console.log('Detalhes atualizados da sala:', response.data.room);
+                setCurrentRoom(response.data.room);
+                setPlayers(response.data.room.players || []);
+
+                // Mostrar o saldo atual do jogador
+                const myPlayer = response.data.room.players.find(p => p.userId === userId.current);
+                if (myPlayer) {
+                    setPlayerBalance(myPlayer.balance);
+                }
+
+                // Atualizar o estado da rodada atual
+                if (response.data.room.currentRound) {
+                    setCurrentRound(response.data.room.currentRound);
+                    setAllPlays(response.data.room.currentRound.plays || []);
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao buscar detalhes da sala:', error);
         }
     };
 
@@ -370,6 +448,7 @@ const BlackjackScreen = ({ navigation }) => {
             setCurrentRoom(null);
             setPlayers([]);
             setGamePhase('waiting');
+            setAllPlays([]);
             loadRooms(); // Recarregar lista de salas
         }
     };
@@ -481,6 +560,39 @@ const BlackjackScreen = ({ navigation }) => {
         </View>
     );
 
+    // Renderizar as cartas de um jogador
+    const renderPlayerCards = (play) => {
+        if (!play || !play.cards || play.cards.length === 0) return null;
+
+        const showResult = gamePhase === 'result' && play.result;
+
+        return (
+            <>
+                <View style={styles.otherPlayerHeader}>
+                    <Text style={styles.otherPlayerName}>{play.nickname}</Text>
+                    <Text style={styles.otherPlayerInfo}>Posição: {play.position}</Text>
+                    {play.bet > 0 && (
+                        <Text style={styles.otherPlayerInfo}>Aposta: {play.bet}</Text>
+                    )}
+                    <Text style={styles.otherPlayerInfo}>Pontos: {play.points}</Text>
+                    {showResult && (
+                        <Text style={[
+                            styles.otherPlayerResult,
+                            play.result === 'ganhou' || play.result === 'blackjack' ? styles.winText :
+                                play.result === 'perdeu' ? styles.loseText : styles.tieText
+                        ]}>
+                            {resultTranslation(play.result)}
+                        </Text>
+                    )}
+                </View>
+
+                <View style={styles.cardsContainer}>
+                    {play.cards.map((card, index) => renderCard(card, index))}
+                </View>
+            </>
+        );
+    };
+
     // Renderizar a sala de jogo
     const renderGameRoom = () => (
         <View style={styles.gameContainer}>
@@ -511,7 +623,7 @@ const BlackjackScreen = ({ navigation }) => {
                 <Text style={styles.gameStatusText}>{gameStatus}</Text>
             </View>
 
-            <View style={styles.gameArea}>
+            <ScrollView style={styles.gameArea}>
                 {/* Área do dealer */}
                 <View style={styles.dealerArea}>
                     <Text style={styles.areaTitle}>Dealer</Text>
@@ -526,7 +638,7 @@ const BlackjackScreen = ({ navigation }) => {
                     </View>
                 </View>
 
-                {/* Área do jogador */}
+                {/* Área do jogador atual */}
                 <View style={styles.playerArea}>
                     <Text style={styles.areaTitle}>Suas Cartas</Text>
                     <Text style={styles.points}>Pontos: {playerPoints}</Text>
@@ -550,7 +662,22 @@ const BlackjackScreen = ({ navigation }) => {
                         </Text>
                     )}
                 </View>
-            </View>
+
+                {/* Área para mostrar as cartas de outros jogadores */}
+                {(gamePhase === 'playing' || gamePhase === 'result') && allPlays.length > 0 && (
+                    <View style={styles.otherPlayersArea}>
+                        <Text style={styles.areaTitle}>Outros Jogadores</Text>
+                        {allPlays
+                            .filter(play => play.userId !== userId.current)
+                            .sort((a, b) => a.position - b.position)
+                            .map(play => (
+                                <View key={play.userId} style={styles.otherPlayerContainer}>
+                                    {renderPlayerCards(play)}
+                                </View>
+                            ))}
+                    </View>
+                )}
+            </ScrollView>
 
             {/* Controles do jogo */}
             <View style={styles.controls}>
@@ -801,6 +928,36 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.1)',
         padding: 16,
         borderRadius: 8,
+        marginBottom: 16,
+    },
+    otherPlayersArea: {
+        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 16,
+    },
+    otherPlayerContainer: {
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 12,
+    },
+    otherPlayerHeader: {
+        marginBottom: 8,
+    },
+    otherPlayerName: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    otherPlayerInfo: {
+        color: '#ddd',
+        fontSize: 14,
+    },
+    otherPlayerResult: {
+        fontWeight: 'bold',
+        fontSize: 16,
+        marginTop: 4,
     },
     areaTitle: {
         color: '#fff',

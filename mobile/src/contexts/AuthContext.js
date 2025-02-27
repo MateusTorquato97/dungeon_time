@@ -57,6 +57,13 @@ export function AuthProvider({ children }) {
         }
     });
 
+    socket.on('connect', () => {
+        console.log('Socket conectado com dados do usuário:', {
+            token: token,
+            usuario: usuario
+        });
+    });
+
     return (
         <AuthContext.Provider value={{
             usuario,

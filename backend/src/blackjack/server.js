@@ -98,7 +98,9 @@ io.on('connection', (socket) => {
             // Notify the player they joined
             socket.emit('room joined', {
                 roomId,
-                position: result.position
+                position: result.position,
+                userId: socket.user.id,
+                nickname: socket.user.nickname
             });
 
             // Notify other players in the room
