@@ -28,7 +28,7 @@ const CasinoScreen = ({ navigation }) => {
     const handleGamePress = (gameId) => {
         switch (gameId) {
             case 1: // Blackjack
-                navigation.navigate('RoomsScreen');
+                navigation.navigate('Blackjack');
                 break;
             case 2: // Roleta
                 console.log('Roleta - Em desenvolvimento');

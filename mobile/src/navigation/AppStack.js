@@ -10,6 +10,7 @@ import BattleScreen from '../screens/Battle';
 import RankingScreen from '../screens/RankingArena';
 import BattleHistoryScreen from '../screens/BattleHistory';
 import CasinoScreen from '../screens/Casino';
+import BlackjackScreen from '../screens/Blackjack';
 
 const Stack = createNativeStackNavigator();
 
@@ -26,6 +27,7 @@ export default function AppStack() {
             <Stack.Screen name="Ranking" component={RankingScreen} />
             <Stack.Screen name="BattleHistory" component={BattleHistoryScreen} />
             <Stack.Screen name="Casino" component={CasinoScreen} />
+            <Stack.Screen name="Blackjack" component={BlackjackScreen} />
         </Stack.Navigator>
     );
 }
