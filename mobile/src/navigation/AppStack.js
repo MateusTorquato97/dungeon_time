@@ -10,9 +10,6 @@ import BattleScreen from '../screens/Battle';
 import RankingScreen from '../screens/RankingArena';
 import BattleHistoryScreen from '../screens/BattleHistory';
 import CasinoScreen from '../screens/Casino';
-// Importações das telas do Blackjack:
-import RoomsScreen from '../screens/Blackjack/RoomsScreen';
-import RoomDetail from '../screens/Blackjack/RoomDetail';
 
 const Stack = createNativeStackNavigator();
 
@@ -29,10 +26,6 @@ export default function AppStack() {
             <Stack.Screen name="Ranking" component={RankingScreen} />
             <Stack.Screen name="BattleHistory" component={BattleHistoryScreen} />
             <Stack.Screen name="Casino" component={CasinoScreen} />
-            {/* Outras telas protegidas */}
-            {/* Rotas do Blackjack */}
-            <Stack.Screen name="RoomsScreen" component={RoomsScreen} />
-            <Stack.Screen name="BlackjackRoomDetail" component={RoomDetail} />
         </Stack.Navigator>
     );
 }
