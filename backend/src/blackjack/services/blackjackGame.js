@@ -29,7 +29,13 @@ export class BlackjackGame {
      * Verifica se deve iniciar uma nova rodada
      */
     shouldStartNewRound() {
-        return this.players.length > 0 && !this.currentRoundId && this.roundStatus !== 'em_distribuicao';
+        const result = this.players.length > 0 && !this.currentRoundId && this.roundStatus !== 'em_distribuicao';
+        console.log(`[Blackjack] Verificando condições para nova rodada: 
+        - Jogadores: ${this.players.length} > 0? ${this.players.length > 0}
+        - currentRoundId nulo? ${!this.currentRoundId}
+        - roundStatus não é 'em_distribuicao'? ${this.roundStatus !== 'em_distribuicao'}
+        - Resultado: ${result}`);
+        return result;
     }
 
     /**
@@ -742,11 +748,14 @@ export class BlackjackGame {
         try {
             await client.query('BEGIN');
 
+            console.log(`[Blackjack] Jogador ${userId} solicitou stand na sala ${this.roomId}`);
+
             // Se não for a vez do jogador e o jogador estiver ativo, não faz nada
             if (this.currentPlayerIndex >= 0 &&
                 this.currentPlayerIndex < this.activePlayers.length &&
                 this.activePlayers[this.currentPlayerIndex].userId !== userId) {
                 await client.query('ROLLBACK');
+                console.log(`[Blackjack] Não é a vez do jogador ${userId}`);
                 return false; // Não é a vez do jogador
             }
 
@@ -754,6 +763,7 @@ export class BlackjackGame {
             const playerIndex = this.activePlayers.findIndex(p => p.userId === userId);
             if (playerIndex === -1) {
                 await client.query('ROLLBACK');
+                console.log(`[Blackjack] Jogador ${userId} não encontrado na lista de jogadores ativos`);
                 return false; // Jogador não encontrado
             }
 
@@ -762,6 +772,7 @@ export class BlackjackGame {
             // Verifica se o jogador pode fazer stand
             if (player.status !== 'aguardando' && player.status !== 'hit') {
                 await client.query('ROLLBACK');
+                console.log(`[Blackjack] Jogador ${userId} não pode fazer stand. Status atual: ${player.status}`);
                 return false; // Jogador não pode fazer stand
             }
 
@@ -784,10 +795,12 @@ export class BlackjackGame {
 
             // Se for a vez do jogador, passa para o próximo
             if (this.currentPlayerIndex === playerIndex) {
+                console.log(`[Blackjack] Passando para o próximo jogador após stand do jogador ${userId}`);
                 await this.nextPlayer();
             }
 
             await client.query('COMMIT');
+            console.log(`[Blackjack] Stand do jogador ${userId} processado com sucesso`);
 
             // Atualiza o estado do jogo
             await this.broadcastGameState();
@@ -1017,6 +1030,8 @@ export class BlackjackGame {
      */
     async nextPlayer() {
         let foundNextPlayer = false;
+        console.log(`[Blackjack] Procurando próximo jogador na sala ${this.roomId}`);
+        console.log(`[Blackjack] Players ativos: ${this.activePlayers.length}, Índice atual: ${this.currentPlayerIndex}`);
 
         // Procura o próximo jogador que ainda não terminou
         for (let i = this.currentPlayerIndex + 1; i < this.activePlayers.length; i++) {
@@ -1024,6 +1039,7 @@ export class BlackjackGame {
             if (player.status === 'aguardando' || player.status === 'hit') {
                 this.currentPlayerIndex = i;
                 foundNextPlayer = true;
+                console.log(`[Blackjack] Próximo jogador encontrado: ${player.userId}`);
 
                 // Notifica os jogadores sobre a mudança de turno
                 this.io.to(`blackjack-room-${this.roomId}`).emit('next-player', {
@@ -1036,6 +1052,7 @@ export class BlackjackGame {
 
         // Se não encontrou próximo jogador, finaliza a rodada
         if (!foundNextPlayer) {
+            console.log(`[Blackjack] Não há mais jogadores para jogar. Finalizando a rodada na sala ${this.roomId}`);
             await this.finishRound();
         }
     }
@@ -1048,6 +1065,7 @@ export class BlackjackGame {
 
         try {
             await client.query('BEGIN');
+            console.log(`[Blackjack] Iniciando finalização da rodada ${this.currentRoundId} na sala ${this.roomId}`);
 
             // Atualiza o status da rodada para finalizada
             const updateRoundQuery = `
@@ -1058,11 +1076,16 @@ export class BlackjackGame {
 
             await client.query(updateRoundQuery, [this.currentRoundId]);
             this.roundStatus = 'finalizada';
+            console.log(`[Blackjack] Status da rodada atualizado para finalizada`);
 
             // Joga as cartas do dealer
+            console.log(`[Blackjack] Cartas iniciais do dealer: ${JSON.stringify(this.dealerCards)}, Pontos: ${this.dealerPoints}`);
             while (this.dealerPoints < 17) {
-                this.dealerCards.push(this.deck.drawCard());
+                const newCard = this.deck.drawCard();
+                console.log(`[Blackjack] Dealer comprou carta: ${JSON.stringify(newCard)}`);
+                this.dealerCards.push(newCard);
                 this.dealerPoints = this.calculatePoints(this.dealerCards);
+                console.log(`[Blackjack] Novos pontos do dealer: ${this.dealerPoints}`);
             }
 
             // Atualiza as cartas do dealer
@@ -1077,10 +1100,13 @@ export class BlackjackGame {
                 this.dealerPoints,
                 this.currentRoundId
             ]);
+            console.log(`[Blackjack] Cartas do dealer atualizadas no banco`);
 
             // Processa o resultado de cada jogador
+            console.log(`[Blackjack] Processando resultados para ${this.activePlayers.length} jogadores`);
             for (const player of this.activePlayers) {
                 if (player.status === 'surrender') {
+                    console.log(`[Blackjack] Jogador ${player.userId} já desistiu, pulando...`);
                     continue; // Jogador já desistiu
                 }
 
@@ -1090,10 +1116,12 @@ export class BlackjackGame {
                 // Verifica se o jogador estourou
                 if (player.points > 21) {
                     resultado = 'perdeu';
+                    console.log(`[Blackjack] Jogador ${player.userId} estourou (${player.points} pontos)`);
                 } else if (this.dealerPoints > 21) {
                     // Dealer estourou, jogador ganha
                     resultado = 'ganhou';
                     winAmount = player.bet * 2;
+                    console.log(`[Blackjack] Dealer estourou. Jogador ${player.userId} ganhou ${winAmount}`);
                 } else if (player.points > this.dealerPoints) {
                     // Jogador tem mais pontos que o dealer
                     resultado = 'ganhou';
@@ -1102,16 +1130,20 @@ export class BlackjackGame {
                     if (player.points === 21 && player.cards.length === 2) {
                         resultado = 'blackjack';
                         winAmount = player.bet * 2.5;
+                        console.log(`[Blackjack] Jogador ${player.userId} fez blackjack! Ganhou ${winAmount}`);
                     } else {
                         winAmount = player.bet * 2;
+                        console.log(`[Blackjack] Jogador ${player.userId} ganhou com ${player.points} pontos (${winAmount})`);
                     }
                 } else if (player.points === this.dealerPoints) {
                     // Empate
                     resultado = 'empatou';
                     winAmount = player.bet;
+                    console.log(`[Blackjack] Jogador ${player.userId} empatou com o dealer (${player.points} pontos). Recuperou ${winAmount}`);
                 } else {
                     // Dealer tem mais pontos
                     resultado = 'perdeu';
+                    console.log(`[Blackjack] Jogador ${player.userId} perdeu para o dealer (${player.points} vs ${this.dealerPoints})`);
                 }
 
                 // Atualiza o resultado da jogada
@@ -1122,6 +1154,7 @@ export class BlackjackGame {
                 `;
 
                 await client.query(updatePlayQuery, [resultado, player.playId]);
+                console.log(`[Blackjack] Resultado ${resultado} registrado para jogador ${player.userId}`);
 
                 // Se o jogador ganhou ou empatou, devolve o valor
                 if (winAmount > 0) {
@@ -1141,6 +1174,7 @@ export class BlackjackGame {
                     `;
 
                     await client.query(updatePlayerQuery, [winAmount, player.userId, this.roomId]);
+                    console.log(`[Blackjack] ${winAmount} moedas adicionadas ao jogador ${player.userId}`);
 
                     // Atualiza a lista local de jogadores
                     const playerIndex = this.players.findIndex(p => p.userId === player.userId);
@@ -1151,29 +1185,58 @@ export class BlackjackGame {
             }
 
             await client.query('COMMIT');
+            console.log(`[Blackjack] Commit realizado para finalização da rodada`);
 
             // Notifica os jogadores sobre o resultado
             this.io.to(`blackjack-room-${this.roomId}`).emit('round-finished', {
                 dealerCards: this.dealerCards,
                 dealerPoints: this.dealerPoints,
-                results: this.activePlayers.map(p => ({
-                    userId: p.userId,
-                    cards: p.cards,
-                    points: p.points,
-                    bet: p.bet,
-                    result: p.status === 'surrender' ? 'surrender' : null // O resultado real está no banco de dados
+                results: this.activePlayers.map(player => ({
+                    userId: player.userId,
+                    points: player.points,
+                    result: player.status === 'surrender' ? 'surrender' :
+                        player.points > 21 ? 'bust' :
+                            this.dealerPoints > 21 ? 'win' :
+                                player.points > this.dealerPoints ? 'win' :
+                                    player.points < this.dealerPoints ? 'lose' :
+                                        'push'
                 }))
             });
+            console.log(`[Blackjack] Evento round-finished emitido`);
+
+            // Adicione logo após:
+            console.log(`[Blackjack] Detalhes do evento round-finished:`, JSON.stringify({
+                dealerCards: this.dealerCards,
+                dealerPoints: this.dealerPoints,
+                results: this.activePlayers.map(p => ({
+                    userId: p.userId,
+                    points: p.points,
+                    result: p.status === 'surrender' ? 'surrender' : null
+                }))
+            }));
+
+            // E também adicione uma verificação do método broadcastGameState
+            console.log(`[Blackjack] Chamando broadcastGameState após finalização da rodada`);
+
+            setTimeout(() => {
+                this.broadcastGameState();
+                console.log(`[Blackjack] Estado do jogo atualizado após finalização da rodada`);
+            }, 500);
 
             // Reseta o estado para iniciar uma nova rodada após alguns segundos
+            console.log(`[Blackjack] Agendando início da próxima rodada em 5 segundos`);
             setTimeout(async () => {
                 this.currentRoundId = null;
                 this.currentPlayerIndex = -1;
                 this.roundStatus = null;
+                console.log(`[Blackjack] Estado resetado. Verificando se deve iniciar nova rodada (${this.shouldStartNewRound()})`);
 
                 // Inicia uma nova rodada se houver jogadores
                 if (this.shouldStartNewRound()) {
+                    console.log(`[Blackjack] Iniciando nova rodada`);
                     await this.startNewRound();
+                } else {
+                    console.log(`[Blackjack] Condições para nova rodada não atendidas`);
                 }
             }, 5000);
 
@@ -1186,6 +1249,7 @@ export class BlackjackGame {
             console.error(`[Blackjack] Erro ao finalizar rodada na sala ${this.roomId}:`, error);
             return false;
         } finally {
+            await client.query('COMMIT');
             client.release();
         }
     }
