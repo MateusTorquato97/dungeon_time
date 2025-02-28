@@ -352,6 +352,25 @@ class BlackjackService {
         }
     }
 
+    async checkPlayerInRoom(userId, roomId) {
+        const client = await pool.connect();
+        try {
+            // Verificar se o jogador está na sala
+            const playerCheck = await client.query(`
+                SELECT COUNT(*) as count 
+                FROM blackjack_jogadores_sala
+                WHERE sala_id = $1 AND usuario_id = $2
+            `, [roomId, userId]);
+
+            return parseInt(playerCheck.rows[0].count) > 0;
+        } catch (error) {
+            console.error('[Blackjack] Erro ao verificar jogador na sala:', error);
+            return false; // Em caso de erro, considera que o jogador não está na sala
+        } finally {
+            client.release();
+        }
+    }
+
     async startRound(roomId) {
         const client = await pool.connect();
         try {

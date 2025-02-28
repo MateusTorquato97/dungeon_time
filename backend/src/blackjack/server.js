@@ -440,13 +440,18 @@ io.on('connection', (socket) => {
         console.log(`[Blackjack] Usuário desconectado: ${socket.id}`);
         if (currentRoomId && socket.user) {
             try {
-                await blackjackService.leaveRoom(socket.user.id, currentRoomId);
+                // Primeiro verificar se o jogador ainda está na sala antes de tentar removê-lo
+                const playerExists = await blackjackService.checkPlayerInRoom(socket.user.id, currentRoomId);
 
-                // Notify other players in the room
-                io.to(`room_${currentRoomId}`).emit('player left', {
-                    userId: socket.user.id,
-                    position: currentPosition
-                });
+                if (playerExists) {
+                    await blackjackService.leaveRoom(socket.user.id, currentRoomId);
+
+                    // Notify other players in the room
+                    io.to(`room_${currentRoomId}`).emit('player left', {
+                        userId: socket.user.id,
+                        position: currentPosition
+                    });
+                }
             } catch (error) {
                 console.error('[Blackjack] Erro ao sair da sala após desconexão:', error);
             }
