@@ -357,14 +357,27 @@ class BlackjackService {
         try {
             await client.query('BEGIN');
 
-            // Verifica se a sala existe e está em status de espera
+            // Verifica se a sala existe e está em status apropriado
+            // Modificado para aceitar tanto 'aguardando' quanto 'em_andamento'
             const roomResult = await client.query(`
                 SELECT * FROM blackjack_salas
-                WHERE id = $1 AND status = 'aguardando'
+                WHERE id = $1 AND (status = 'aguardando' OR status = 'em_andamento')
             `, [roomId]);
 
             if (roomResult.rows.length === 0) {
                 throw new Error('Sala não encontrada ou não está em status de espera');
+            }
+
+            // Verificar se não há uma rodada ativa em andamento
+            const activeRoundResult = await client.query(`
+                SELECT * FROM blackjack_rodadas
+                WHERE sala_id = $1 AND status IN ('apostas', 'jogadas', 'em_distribuicao')
+                ORDER BY created_at DESC
+                LIMIT 1
+            `, [roomId]);
+
+            if (activeRoundResult.rows.length > 0) {
+                throw new Error('Já existe uma rodada em andamento nesta sala');
             }
 
             // Busca jogadores na sala
@@ -486,22 +499,33 @@ class BlackjackService {
 
             // Verifica se a rodada existe e está em status de apostas
             const roundResult = await client.query(`
-                SELECT *
-                FROM blackjack_rodadas
-                WHERE id = $1 AND status = 'apostas'
+                SELECT br.*, bs.id as sala_id
+                FROM blackjack_rodadas br
+                JOIN blackjack_salas bs ON br.sala_id = bs.id
+                WHERE br.id = $1 AND br.status = 'apostas'
             `, [roundId]);
 
             if (roundResult.rows.length === 0) {
                 throw new Error('Rodada não encontrada ou não está em status de apostas');
             }
 
+            const roomId = roundResult.rows[0].sala_id;
+
             // Busca jogadores que fizeram apostas
             const playsResult = await client.query(`
-                SELECT *
-                FROM blackjack_jogadas
-                WHERE rodada_id = $1 AND status = 'apostou'
-                ORDER BY id
+                SELECT bj.*
+                FROM blackjack_jogadas bj
+                WHERE bj.rodada_id = $1 AND bj.status = 'apostou'
+                ORDER BY bj.id
             `, [roundId]);
+
+            // Busca todos os jogadores na sala para atualizar contadores de inatividade
+            const allPlayersResult = await client.query(`
+                SELECT bjs.usuario_id, bj.status
+                FROM blackjack_jogadores_sala bjs
+                LEFT JOIN blackjack_jogadas bj ON bjs.usuario_id = bj.usuario_id AND bj.rodada_id = $1
+                WHERE bjs.sala_id = $2
+            `, [roundId, roomId]);
 
             if (playsResult.rows.length === 0) {
                 // Se ninguém apostou, finaliza a rodada sem distribuir cartas
@@ -510,8 +534,50 @@ class BlackjackService {
                     SET status = 'finalizada', finalizada_em = CURRENT_TIMESTAMP
                     WHERE id = $1
                 `, [roundId]);
+
+                await client.query(`
+                    UPDATE blackjack_salas
+                    SET status = 'aguardando'
+                    WHERE id = $1
+                `, [roomId]);
+
+                // Incrementa o contador de rodadas sem aposta para cada jogador que não apostou
+                for (const player of allPlayersResult.rows) {
+                    if (!player.status || player.status !== 'apostou') {
+                        await client.query(`
+                            UPDATE blackjack_jogadores_sala
+                            SET rodadas_sem_aposta = rodadas_sem_aposta + 1
+                            WHERE sala_id = $1 AND usuario_id = $2
+                        `, [roomId, player.usuario_id]);
+                    }
+                }
+
                 await client.query('COMMIT');
-                return { success: false, message: 'Nenhuma aposta feita' };
+                return {
+                    success: false,
+                    message: 'Nenhuma aposta feita',
+                    roomId: roomId
+                };
+            }
+
+            // Resetar o contador de rodadas sem aposta para quem apostou
+            for (const play of playsResult.rows) {
+                await client.query(`
+                UPDATE blackjack_jogadores_sala
+                SET rodadas_sem_aposta = 0
+                WHERE sala_id = $1 AND usuario_id = $2
+            `, [roomId, play.usuario_id]);
+            }
+
+            // Incrementar o contador para jogadores que não apostaram
+            for (const player of allPlayersResult.rows) {
+                if (!player.status || player.status !== 'apostou') {
+                    await client.query(`
+                    UPDATE blackjack_jogadores_sala
+                    SET rodadas_sem_aposta = rodadas_sem_aposta + 1
+                    WHERE sala_id = $1 AND usuario_id = $2
+                `, [roomId, player.usuario_id]);
+                }
             }
 
             // Cria e embaralha o baralho
@@ -980,37 +1046,17 @@ class BlackjackService {
         try {
             await client.query('BEGIN');
 
-            // Busca jogadores com pelo menos 3 rodadas sem jogar
-            const inactivePlayers = await client.query(`
-                WITH recent_rounds AS (
-                    SELECT id 
-                    FROM blackjack_rodadas 
-                    WHERE sala_id = $1 
-                    ORDER BY created_at DESC 
-                    LIMIT 3
-                ),
-                player_bets AS (
-                    SELECT 
-                        bjs.usuario_id,
-                        COUNT(DISTINCT CASE WHEN bj.aposta > 0 THEN bj.rodada_id END) as rounds_played
-                    FROM blackjack_jogadores_sala bjs
-                    LEFT JOIN blackjack_jogadas bj ON bjs.usuario_id = bj.usuario_id
-                    WHERE bjs.sala_id = $1
-                    AND bj.rodada_id IN (SELECT id FROM recent_rounds)
-                    GROUP BY bjs.usuario_id
-                )
-                SELECT 
-                    pb.usuario_id,
-                    bjs.saldo_atual
-                FROM player_bets pb
-                JOIN blackjack_jogadores_sala bjs ON pb.usuario_id = bjs.usuario_id AND bjs.sala_id = $1
-                WHERE pb.rounds_played = 0
+            // Busca jogadores com 3 ou mais rodadas sem apostar
+            const inactivePlayersQuery = await client.query(`
+                SELECT usuario_id, saldo_atual
+                FROM blackjack_jogadores_sala
+                WHERE sala_id = $1 AND rodadas_sem_aposta >= 3
             `, [roomId]);
 
             const removedPlayers = [];
 
             // Remove os jogadores inativos e devolve o saldo
-            for (const player of inactivePlayers.rows) {
+            for (const player of inactivePlayersQuery.rows) {
                 // Devolve o saldo restante para as moedas do usuário
                 await client.query(`
                     UPDATE usuarios SET coins = coins + $1 WHERE id = $2
@@ -1025,11 +1071,27 @@ class BlackjackService {
                 removedPlayers.push(player.usuario_id);
             }
 
-            await client.query('COMMIT');
+            // Verifica se a sala fica vazia após remover jogadores
+            const playerCountQuery = await client.query(`
+                SELECT COUNT(*) as player_count
+                FROM blackjack_jogadores_sala
+                WHERE sala_id = $1
+            `, [roomId]);
 
+            if (parseInt(playerCountQuery.rows[0].player_count) === 0) {
+                // Sala vazia, marca como finalizada
+                await client.query(`
+                    UPDATE blackjack_salas
+                    SET status = 'finalizada'
+                    WHERE id = $1
+                `, [roomId]);
+            }
+
+            await client.query('COMMIT');
             return removedPlayers;
         } catch (error) {
             await client.query('ROLLBACK');
+            console.error('[Blackjack] Erro ao remover jogadores inativos:', error);
             throw error;
         } finally {
             client.release();

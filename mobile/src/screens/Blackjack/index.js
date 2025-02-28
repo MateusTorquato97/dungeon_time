@@ -194,6 +194,62 @@ const BlackjackScreen = ({ navigation }) => {
                 setAllPlays([]);
             });
 
+            // Listener para round canceled
+            socket.current.on('round canceled', (data) => {
+                console.log('Rodada cancelada:', data);
+                setGameStatus(`${data.message}. Iniciando nova rodada...`);
+                setGamePhase('waiting');
+
+                // Resetar estado da rodada
+                setCurrentRound(null);
+                setDealerCards([]);
+                setPlayerCards([]);
+                setDealerPoints(0);
+                setPlayerPoints(0);
+                setRoundResult(null);
+                setCurrentBet(0);
+                setAllPlays([]);
+            });
+
+            // Listener para players removed
+            socket.current.on('players removed', (data) => {
+                console.log('Jogadores removidos:', data);
+
+                // Atualizar lista de jogadores
+                setPlayers(prevPlayers =>
+                    prevPlayers.filter(p => !data.userIds.includes(p.userId))
+                );
+
+                // Remover jogadas desses jogadores
+                setAllPlays(prevPlays =>
+                    prevPlays.filter(p => !data.userIds.includes(p.userId))
+                );
+
+                // Mostrar mensagem de jogadores removidos
+                if (data.reason === 'inatividade') {
+                    const playerNames = data.userIds.map(id => {
+                        const player = players.find(p => p.userId === id);
+                        return player ? player.nickname : `Jogador ${id}`;
+                    }).join(', ');
+
+                    setGameStatus(`${playerNames} ${data.userIds.length > 1 ? 'foram removidos' : 'foi removido'} por inatividade.`);
+                }
+            });
+
+            // Listener para kicked (quando o próprio jogador é expulso)
+            socket.current.on('kicked', (data) => {
+                console.log('Você foi expulso:', data);
+                Alert.alert('Aviso', data.reason);
+
+                // Voltar para a tela de salas
+                setInRoom(false);
+                setCurrentRoom(null);
+                setPlayers([]);
+                setGamePhase('waiting');
+                setAllPlays([]);
+                loadRooms(); // Recarregar lista de salas
+            });
+
             socket.current.on('betting ended', (data) => {
                 console.log('Apostas encerradas:', data);
                 setGameStatus('Apostas encerradas! Distribuindo cartas...');

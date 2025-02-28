@@ -71,6 +71,116 @@ const roomTimers = new Map();
 // Armazena contadores de inatividade para cada jogador
 const inactivityCounters = new Map();
 
+// Função para iniciar o temporizador de apostas
+function startBettingTimer(roomId, roundId) {
+    // Clear any existing timer for this room
+    if (roomTimers.has(roomId)) {
+        clearTimeout(roomTimers.get(roomId));
+    }
+
+    // Start a 20-second timer for bets
+    const timer = setTimeout(async () => {
+        try {
+            const currentRoundDetails = await blackjackService.getRoomDetails(roomId);
+
+            if (currentRoundDetails.currentRound &&
+                currentRoundDetails.currentRound.status === 'apostas') {
+
+                // Notify players that betting time is over
+                io.to(`room_${roomId}`).emit('betting ended', {
+                    message: 'Tempo de apostas encerrado!'
+                });
+
+                // Deal initial cards
+                const dealResult = await blackjackService.dealInitialCards(roundId);
+                if (!dealResult.success) {
+                    console.error('[Blackjack] Erro ao distribuir cartas:', dealResult.message);
+                    // Emite evento "round canceled" para tratar o caso de nenhuma aposta
+                    io.to(`room_${roomId}`).emit('round canceled', {
+                        message: dealResult.message
+                    });
+
+                    // Verificar e remover jogadores inativos
+                    try {
+                        const inactivePlayers = await blackjackService.removeInactivePlayers(roomId);
+
+                        if (inactivePlayers.length > 0) {
+                            io.to(`room_${roomId}`).emit('players removed', {
+                                userIds: inactivePlayers,
+                                reason: 'inatividade'
+                            });
+
+                            for (const [socketId, socket] of io.sockets.sockets.entries()) {
+                                if (socket.user && inactivePlayers.includes(socket.user.id)) {
+                                    socket.emit('kicked', { reason: 'Você foi removido da sala por inatividade' });
+                                    socket.leave(`room_${roomId}`);
+                                }
+                            }
+                        }
+
+                        // Iniciar nova rodada após 5 segundos
+                        setTimeout(async () => {
+                            try {
+                                const roomDetails = await blackjackService.getRoomDetails(roomId);
+
+                                if (roomDetails.players.length > 0) {
+                                    const result = await blackjackService.startRound(roomId);
+
+                                    io.to(`room_${roomId}`).emit('round started', {
+                                        roundId: result.roundId,
+                                        message: 'Nova rodada iniciada! Você tem 20 segundos para apostar.'
+                                    });
+
+                                    startBettingTimer(roomId, result.roundId);
+                                }
+                            } catch (error) {
+                                console.error('[Blackjack] Erro ao iniciar nova rodada após cancelamento:', error);
+                            }
+                        }, 5000);
+                    } catch (error) {
+                        console.error('[Blackjack] Erro ao verificar jogadores inativos:', error);
+                    }
+
+                    return;
+                }
+
+                // Prepare data to send to clients
+                const playsWithCards = await blackjackService.getPlaysForRound(roundId);
+
+                // Find the first player who needs to act
+                const activePlayerIndex = playsWithCards.findIndex(p => p.status === 'hit');
+                const activePlayer = activePlayerIndex >= 0 ? playsWithCards[activePlayerIndex] : null;
+
+                // Notify all players about the dealer's up card and initial state
+                io.to(`room_${roomId}`).emit('cards dealt', {
+                    dealerUpCard: dealResult.dealerHand[0],
+                    plays: playsWithCards,
+                    activePlayer: activePlayer ? {
+                        userId: activePlayer.userId,
+                        position: activePlayer.position
+                    } : null
+                });
+
+                // If there's an active player, start their turn timer
+                if (activePlayer) {
+                    startPlayerTurnTimer(roomId, roundId, activePlayer.userId);
+                } else {
+                    // No active players, dealer plays
+                    await blackjackService.dealerPlay(roundId);
+                    finishRound(roomId, roundId);
+                }
+            }
+        } catch (error) {
+            console.error('[Blackjack] Erro ao lidar cartas:', error);
+            io.to(`room_${roomId}`).emit('error', {
+                message: 'Erro ao distribuir as cartas. Tente iniciar uma nova rodada.'
+            });
+        }
+    }, 20000); // 20 seconds for bets
+
+    roomTimers.set(roomId, timer);
+}
+
 // Handlers do Socket.IO
 io.on('connection', (socket) => {
     console.log(`[Blackjack] Usuário conectado: ${socket.id}, User ID: ${socket.user?.id}`);
@@ -203,70 +313,8 @@ io.on('connection', (socket) => {
                 message: 'Apostas abertas! Você tem 20 segundos para apostar.'
             });
 
-            // Clear any existing timer for this room
-            if (roomTimers.has(roomId)) {
-                clearTimeout(roomTimers.get(roomId));
-            }
-
-            // Start a 20-second timer for bets
-            const timer = setTimeout(async () => {
-                try {
-                    const currentRoundDetails = await blackjackService.getRoomDetails(roomId);
-
-                    if (currentRoundDetails.currentRound &&
-                        currentRoundDetails.currentRound.status === 'apostas') {
-
-                        // Notify players that betting time is over
-                        io.to(`room_${roomId}`).emit('betting ended', {
-                            message: 'Tempo de apostas encerrado!'
-                        });
-
-                        // Deal initial cards
-                        const dealResult = await blackjackService.dealInitialCards(result.roundId);
-                        if (!dealResult.success) {
-                            console.error('[Blackjack] Erro ao distribuir cartas:', dealResult.message);
-                            // Emite evento "round canceled" para tratar o caso de nenhuma aposta
-                            io.to(`room_${roomId}`).emit('round canceled', {
-                                message: dealResult.message
-                            });
-                            return;
-                        }
-
-                        // Prepare data to send to clients
-                        const playsWithCards = await blackjackService.getPlaysForRound(result.roundId);
-
-                        // Find the first player who needs to act
-                        const activePlayerIndex = playsWithCards.findIndex(p => p.status === 'hit');
-                        const activePlayer = activePlayerIndex >= 0 ? playsWithCards[activePlayerIndex] : null;
-
-                        // Notify all players about the dealer's up card and initial state
-                        io.to(`room_${roomId}`).emit('cards dealt', {
-                            dealerUpCard: dealResult.dealerHand[0],
-                            plays: playsWithCards,
-                            activePlayer: activePlayer ? {
-                                userId: activePlayer.userId,
-                                position: activePlayer.position
-                            } : null
-                        });
-
-                        // If there's an active player, start their turn timer
-                        if (activePlayer) {
-                            startPlayerTurnTimer(roomId, result.roundId, activePlayer.userId);
-                        } else {
-                            // No active players, dealer plays
-                            await blackjackService.dealerPlay(result.roundId);
-                            finishRound(roomId, result.roundId);
-                        }
-                    }
-                } catch (error) {
-                    console.error('[Blackjack] Erro ao lidar cartas:', error);
-                    io.to(`room_${roomId}`).emit('error', {
-                        message: 'Erro ao distribuir as cartas. Tente iniciar uma nova rodada.'
-                    });
-                }
-            }, 20000); // 20 seconds for bets
-
-            roomTimers.set(roomId, timer);
+            // Inicia o temporizador para apostas
+            startBettingTimer(roomId, result.roundId);
 
         } catch (error) {
             console.error('[Blackjack] Erro ao iniciar rodada:', error);
@@ -462,18 +510,7 @@ async function finishRound(roomId, roundId) {
         });
 
         // Check for inactive players to remove
-        const inactivePlayers = [];
-        for (const [userId, count] of inactivityCounters.entries()) {
-            if (count >= 3) { // Remove after 3 inactive rounds
-                try {
-                    await blackjackService.leaveRoom(userId, roomId);
-                    inactivePlayers.push(userId);
-                    inactivityCounters.delete(userId);
-                } catch (error) {
-                    console.error(`[Blackjack] Erro ao remover jogador inativo ${userId}:`, error);
-                }
-            }
-        }
+        const inactivePlayers = await blackjackService.removeInactivePlayers(roomId);
 
         // Notify about removed inactive players
         if (inactivePlayers.length > 0) {
@@ -481,6 +518,14 @@ async function finishRound(roomId, roundId) {
                 userIds: inactivePlayers,
                 reason: 'inatividade'
             });
+
+            // Desconectar os sockets dos jogadores removidos
+            for (const [socketId, socket] of io.sockets.sockets.entries()) {
+                if (socket.user && inactivePlayers.includes(socket.user.id)) {
+                    socket.emit('kicked', { reason: 'Você foi removido da sala por inatividade' });
+                    socket.leave(`room_${roomId}`);
+                }
+            }
         }
 
         // Start a new round automatically after 10 seconds
@@ -497,63 +542,8 @@ async function finishRound(roomId, roundId) {
                         message: 'Nova rodada iniciada! Você tem 20 segundos para apostar.'
                     });
 
-                    // Start the 20-second timer for bets
-                    const betTimer = setTimeout(async () => {
-                        try {
-                            const currentRoundDetails = await blackjackService.getRoomDetails(roomId);
-
-                            if (currentRoundDetails.currentRound &&
-                                currentRoundDetails.currentRound.status === 'apostas') {
-
-                                // Notify players that betting time is over
-                                io.to(`room_${roomId}`).emit('betting ended', {
-                                    message: 'Tempo de apostas encerrado!'
-                                });
-
-                                // Deal initial cards
-                                const dealResult = await blackjackService.dealInitialCards(result.roundId);
-
-                                if (!dealResult.success) {
-                                    console.error('[Blackjack] Erro ao distribuir cartas:', dealResult.message);
-                                    // Se nenhuma aposta foi feita, notifica os jogadores e finaliza a rodada
-                                    io.to(`room_${roomId}`).emit('round canceled', {
-                                        message: dealResult.message
-                                    });
-                                    return;
-                                }
-
-                                // Prepare data to send to clients
-                                const playsWithCards = await blackjackService.getPlaysForRound(result.roundId);
-
-                                // Find the first player who needs to act
-                                const activePlayerIndex = playsWithCards.findIndex(p => p.status === 'hit');
-                                const activePlayer = activePlayerIndex >= 0 ? playsWithCards[activePlayerIndex] : null;
-
-                                // Notify all players about the dealer's up card and initial state
-                                io.to(`room_${roomId}`).emit('cards dealt', {
-                                    dealerUpCard: dealResult.dealerHand[0],
-                                    plays: playsWithCards,
-                                    activePlayer: activePlayer ? {
-                                        userId: activePlayer.userId,
-                                        position: activePlayer.position
-                                    } : null
-                                });
-
-                                // If there's an active player, start their turn timer
-                                if (activePlayer) {
-                                    startPlayerTurnTimer(roomId, result.roundId, activePlayer.userId);
-                                } else {
-                                    // No active players, dealer plays
-                                    await blackjackService.dealerPlay(result.roundId);
-                                    finishRound(roomId, result.roundId);
-                                }
-                            }
-                        } catch (error) {
-                            console.error('[Blackjack] Erro ao lidar cartas na nova rodada:', error);
-                        }
-                    }, 20000); // 20 seconds for bets
-
-                    roomTimers.set(roomId, betTimer);
+                    // Iniciar o temporizador para apostas
+                    startBettingTimer(roomId, result.roundId);
                 }
             } catch (error) {
                 console.error('[Blackjack] Erro ao iniciar nova rodada:', error);

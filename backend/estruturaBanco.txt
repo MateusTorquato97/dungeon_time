@@ -110,17 +110,18 @@ Triggers:
     update_blackjack_jogadas_updated_at BEFORE UPDATE ON blackjack_jogadas FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
 
 
-                                         Table "public.blackjack_jogadores_sala"
-    Column    |            Type             | Collation | Nullable |                       Default
---------------+-----------------------------+-----------+----------+------------------------------------------------------
- id           | integer                     |           | not null | nextval('blackjack_jogadores_sala_id_seq'::regclass)
- sala_id      | integer                     |           | not null |
- usuario_id   | integer                     |           | not null |
- posicao_mesa | integer                     |           | not null |
- saldo_atual  | integer                     |           | not null | 0
- status       | character varying(20)       |           | not null |
- created_at   | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
- updated_at   | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+                                            Table "public.blackjack_jogadores_sala"
+       Column       |            Type             | Collation | Nullable |                       Default
+--------------------+-----------------------------+-----------+----------+------------------------------------------------------
+ id                 | integer                     |           | not null | nextval('blackjack_jogadores_sala_id_seq'::regclass)
+ sala_id            | integer                     |           | not null |
+ usuario_id         | integer                     |           | not null |
+ posicao_mesa       | integer                     |           | not null |
+ saldo_atual        | integer                     |           | not null | 0
+ status             | character varying(20)       |           | not null |
+ created_at         | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ updated_at         | timestamp without time zone |           | not null | CURRENT_TIMESTAMP
+ rodadas_sem_aposta | integer                     |           |          | 0
 Indexes:
     "blackjack_jogadores_sala_pkey" PRIMARY KEY, btree (id)
     "blackjack_jogadores_sala_sala_id_posicao_mesa_key" UNIQUE CONSTRAINT, btree (sala_id, posicao_mesa)
@@ -135,7 +136,7 @@ Foreign-key constraints:
     "blackjack_jogadores_sala_sala_id_fkey" FOREIGN KEY (sala_id) REFERENCES blackjack_salas(id)
     "blackjack_jogadores_sala_usuario_id_fkey" FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 Triggers:
-    update_blackjack_jogadores_sala_updated_at BEFORE UPDATE ON blackjack_jogadores_sala FOR EACH ROW EXECUTE FUNCTION update_updated_at_column
+    update_blackjack_jogadores_sala_updated_at BEFORE UPDATE ON blackjack_jogadores_sala FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
 
 
                                           Table "public.blackjack_rodadas"
