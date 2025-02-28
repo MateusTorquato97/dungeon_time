@@ -43,6 +43,9 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL
 });
 
+// Constantes para os tempos de timer
+const BETTING_TIME = 20; // Tempo para apostas em segundos
+const PLAYER_TURN_TIME = 20; // Tempo para jogada em segundos
 
 // Middleware de autenticação para Socket.IO com log
 io.use((socket, next) => {
@@ -78,8 +81,17 @@ function startBettingTimer(roomId, roundId) {
         clearTimeout(roomTimers.get(roomId));
     }
 
-    // Start a 20-second timer for bets
+    // Notificar todos de que o timer de apostas iniciou
+    io.to(`room_${roomId}`).emit('timer_start', {
+        duration: BETTING_TIME,
+        phase: 'betting'
+    });
+
+    // Start a timer for bets
     const timer = setTimeout(async () => {
+        // Parar o timer
+        io.to(`room_${roomId}`).emit('timer_stop');
+
         try {
             const currentRoundDetails = await blackjackService.getRoomDetails(roomId);
 
@@ -176,7 +188,7 @@ function startBettingTimer(roomId, roundId) {
                 message: 'Erro ao distribuir as cartas. Tente iniciar uma nova rodada.'
             });
         }
-    }, 20000); // 20 seconds for bets
+    }, BETTING_TIME * 1000); // Tempo em segundos * 1000 para milissegundos
 
     roomTimers.set(roomId, timer);
 }
@@ -373,6 +385,9 @@ io.on('connection', (socket) => {
             if (roomTimers.has(`turn_${roundId}_${userId}`)) {
                 clearTimeout(roomTimers.get(`turn_${roundId}_${userId}`));
                 roomTimers.delete(`turn_${roundId}_${userId}`);
+
+                // Parar o timer
+                io.to(`room_${currentRoomId}`).emit('timer_stop');
             }
 
             // Reset inactivity counter when player acts
@@ -447,8 +462,18 @@ function startPlayerTurnTimer(roomId, roundId, userId) {
         clearTimeout(roomTimers.get(timerKey));
     }
 
-    // Start a 20-second timer for the player's turn
+    // Notificar todos de que o timer do jogador iniciou
+    io.to(`room_${roomId}`).emit('timer_start', {
+        duration: PLAYER_TURN_TIME,
+        playerId: userId,
+        phase: 'playing'
+    });
+
+    // Start a timer for the player's turn
     const timer = setTimeout(async () => {
+        // Parar o timer
+        io.to(`room_${roomId}`).emit('timer_stop');
+
         try {
             // Player didn't act in time, automatically stand
             const result = await blackjackService.playerAction(userId, roundId, 'stand');
@@ -493,7 +518,7 @@ function startPlayerTurnTimer(roomId, roundId, userId) {
         } catch (error) {
             console.error('[Blackjack] Erro no timeout do jogador:', error);
         }
-    }, 20000); // 20 seconds for player's turn
+    }, PLAYER_TURN_TIME * 1000); // Tempo em segundos * 1000 para milissegundos
 
     roomTimers.set(timerKey, timer);
 }
@@ -501,6 +526,9 @@ function startPlayerTurnTimer(roomId, roundId, userId) {
 // Função para finalizar uma rodada e mostrar resultados
 async function finishRound(roomId, roundId) {
     try {
+        // Parar qualquer timer em execução
+        io.to(`room_${roomId}`).emit('timer_stop');
+
         const roundDetails = await blackjackService.getRoundDetails(roundId);
 
         io.to(`room_${roomId}`).emit('round finished', {

@@ -29,6 +29,10 @@ const BlackjackScreen = ({ navigation }) => {
     const [gamePhase, setGamePhase] = useState('waiting'); // 'waiting', 'betting', 'playing', 'result'
     // Novo estado para acompanhar as jogadas de todos os jogadores
     const [allPlays, setAllPlays] = useState([]);
+    const [timer, setTimer] = useState(0);
+    const [maxTime, setMaxTime] = useState(20); // Padrão de 20 segundos
+    const [activeTimerPlayerId, setActiveTimerPlayerId] = useState(null);
+    const timerRef = useRef(null);
 
     const socket = useRef(null);
     const myPosition = useRef(null);
@@ -192,6 +196,39 @@ const BlackjackScreen = ({ navigation }) => {
                 setRoundResult(null);
                 setCurrentBet(0);
                 setAllPlays([]);
+            });
+
+            socket.current.on('timer_start', (data) => {
+                console.log('Timer iniciado:', data);
+
+                // Limpar timer anterior se existir
+                if (timerRef.current) {
+                    clearInterval(timerRef.current);
+                }
+
+                setMaxTime(data.duration);
+                setTimer(data.duration);
+                setActiveTimerPlayerId(data.playerId);
+
+                // Iniciar contagem regressiva
+                timerRef.current = setInterval(() => {
+                    setTimer(prevTime => {
+                        if (prevTime <= 1) {
+                            clearInterval(timerRef.current);
+                            return 0;
+                        }
+                        return prevTime - 1;
+                    });
+                }, 1000);
+            });
+
+            socket.current.on('timer_stop', () => {
+                console.log('Timer parado');
+                if (timerRef.current) {
+                    clearInterval(timerRef.current);
+                }
+                setTimer(0);
+                setActiveTimerPlayerId(null);
             });
 
             // Listener para round canceled
@@ -549,6 +586,9 @@ const BlackjackScreen = ({ navigation }) => {
             if (socket.current) {
                 socket.current.disconnect();
             }
+
+            // Limpar qualquer timer que esteja rodando
+            timerRef.current && clearInterval(timerRef.current);
         };
     }, []);
 
@@ -678,6 +718,9 @@ const BlackjackScreen = ({ navigation }) => {
             <View style={styles.gameStatusContainer}>
                 <Text style={styles.gameStatusText}>{gameStatus}</Text>
             </View>
+
+            {/* Componente de Timer */}
+            {renderTimer(timer, maxTime, activeTimerPlayerId)}
 
             <ScrollView style={styles.gameArea}>
                 {/* Área do dealer */}
@@ -840,6 +883,46 @@ const BlackjackScreen = ({ navigation }) => {
             </Modal>
         </View>
     );
+
+    const renderTimer = (secondsLeft, maxSeconds, activePlayerId) => {
+        // Não mostrar timer se não estiver ativo
+        if (!secondsLeft || secondsLeft <= 0) return null;
+
+        // Obter nome do jogador ativo
+        let playerName = 'Jogador';
+        if (activePlayerId) {
+            const activePlayer = players.find(p => p.userId === activePlayerId);
+            playerName = activePlayer ? activePlayer.nickname : 'Jogador';
+        }
+
+        // Calculando percentual para a barra de progresso
+        const percentage = Math.max(0, Math.min(100, (secondsLeft / maxSeconds) * 100));
+
+        // Determinar cor com base no tempo restante
+        let barColor = '#2ecc71'; // Verde
+        if (percentage < 30) {
+            barColor = '#e74c3c'; // Vermelho
+        } else if (percentage < 60) {
+            barColor = '#f39c12'; // Laranja
+        }
+
+        return (
+            <View style={styles.timerContainer}>
+                <Text style={styles.timerText}>
+                    {activePlayerId ? `${playerName}: ` : ''}
+                    {secondsLeft} segundos
+                </Text>
+                <View style={styles.timerBarContainer}>
+                    <View
+                        style={[
+                            styles.timerBar,
+                            { width: `${percentage}%`, backgroundColor: barColor }
+                        ]}
+                    />
+                </View>
+            </View>
+        );
+    };
 
     return inRoom ? renderGameRoom() : renderRoomList();
 };
@@ -1159,6 +1242,28 @@ const styles = StyleSheet.create({
     },
     confirmButton: {
         backgroundColor: '#2ecc71',
+    },
+    timerContainer: {
+        backgroundColor: 'rgba(0, 0, 0, 0.2)',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 16,
+    },
+    timerText: {
+        color: '#fff',
+        textAlign: 'center',
+        fontSize: 16,
+        marginBottom: 4,
+    },
+    timerBarContainer: {
+        height: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        borderRadius: 5,
+        overflow: 'hidden',
+    },
+    timerBar: {
+        height: 10,
+        borderRadius: 5,
     },
 });
 
