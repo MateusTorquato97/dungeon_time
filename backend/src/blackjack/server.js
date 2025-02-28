@@ -561,9 +561,23 @@ async function finishRound(roomId, roundId) {
             }
         }
 
+        // Inicie o timer para mostrar a contagem regressiva para a próxima rodada
+        // Definimos 10 segundos (10000ms) para a próxima rodada
+        const NEXT_ROUND_TIME = 10; // segundos
+
+        // Iniciar contagem regressiva para próxima rodada
+        io.to(`room_${roomId}`).emit('timer_start', {
+            duration: NEXT_ROUND_TIME,
+            phase: 'next_round',
+            message: 'Próxima rodada inicia em'
+        });
+
         // Start a new round automatically after 10 seconds
         const timer = setTimeout(async () => {
             try {
+                // Parar o timer
+                io.to(`room_${roomId}`).emit('timer_stop');
+
                 // Check if there are still players in the room
                 const roomDetails = await blackjackService.getRoomDetails(roomId);
 
@@ -584,7 +598,7 @@ async function finishRound(roomId, roundId) {
                     message: 'Erro ao distribuir as cartas. Tente iniciar uma nova rodada.'
                 });
             }
-        }, 10000); // 10 seconds until next round
+        }, NEXT_ROUND_TIME * 1000); // 10 seconds until next round
 
         roomTimers.set(`next_${roomId}`, timer);
     } catch (error) {
